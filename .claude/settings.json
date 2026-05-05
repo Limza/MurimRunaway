@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude mcp *)",
+      "WebFetch(domain:github.com)",
+      "Read(//c/Users/rkddl/Desktop/MyWork/**)",
+      "Bash(mkdir -p \"c:/Users/rkddl/Desktop/MyWork/MurimRunaway/Docs\")",
+      "Bash(git mv *)",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\rkddl\\\\Desktop\\\\MyWork\\\\MurimRunaway\\\\Assets\" | ForEach-Object { \"$\\($_.Mode\\)  $\\($_.Name\\)\" })",
+      "PowerShell(\"=== _Project ===\"; Get-ChildItem \"c:\\\\Users\\\\rkddl\\\\Desktop\\\\MyWork\\\\MurimRunaway\\\\Assets\\\\_Project\" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }; \"=== Scenes ===\"; Get-ChildItem \"c:\\\\Users\\\\rkddl\\\\Desktop\\\\MyWork\\\\MurimRunaway\\\\Assets\\\\Scenes\" | ForEach-Object { $_.Name })",
+      "WebFetch(domain:www.microsoft.com)",
+      "WebSearch",
+      "Bash(ls Assets/_Project/)",
+      "Bash(ls Assets/_Project/Scripts/)",
+      "Bash(ls Assets/_Project/Scripts/Battle/)",
+      "PowerShell(Move-Item Docs\\\\COMBAT_DESIGN.md Docs\\\\BATTLE_DESIGN.md)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\rkddl\\Desktop\\MyWork\\MurimRunaway\\Docs"
+    ]
+  }
+}

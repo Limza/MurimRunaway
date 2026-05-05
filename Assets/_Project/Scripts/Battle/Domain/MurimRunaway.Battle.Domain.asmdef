@@ -1,0 +1,6 @@
+{
+    "name": "MurimRunaway.Battle.Domain",
+    "rootNamespace": "MurimRunaway.Battle.Domain",
+    "references": [],
+    "autoReferenced": false
+}

@@ -1,0 +1,10 @@
+{
+    "name": "MurimRunaway.Battle.View",
+    "rootNamespace": "MurimRunaway.Battle.View",
+    "references": [
+        "MurimRunaway.Battle.Domain",
+        "MurimRunaway.Battle.Engine",
+        "Unity.TextMeshPro"
+    ],
+    "autoReferenced": false
+}

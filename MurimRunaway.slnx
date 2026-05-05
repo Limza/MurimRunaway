@@ -1,2 +1,4 @@
 ﻿<Solution>
+  <Project Path="MurimRunaway.Battle.Engine.csproj" />
+  <Project Path="MurimRunaway.Battle.Domain.csproj" />
 </Solution>

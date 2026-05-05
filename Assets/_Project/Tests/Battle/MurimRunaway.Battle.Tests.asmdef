@@ -1,0 +1,13 @@
+{
+    "name": "MurimRunaway.Battle.Tests",
+    "rootNamespace": "MurimRunaway.Battle.Tests",
+    "references": [
+        "MurimRunaway.Battle.Domain",
+        "MurimRunaway.Battle.Engine"
+    ],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "precompiledReferences": ["nunit.framework.dll"],
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "autoReferenced": false
+}
