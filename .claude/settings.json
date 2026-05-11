@@ -13,7 +13,13 @@
       "Bash(ls Assets/_Project/)",
       "Bash(ls Assets/_Project/Scripts/)",
       "Bash(ls Assets/_Project/Scripts/Battle/)",
-      "PowerShell(Move-Item Docs\\\\COMBAT_DESIGN.md Docs\\\\BATTLE_DESIGN.md)"
+      "PowerShell(Move-Item Docs\\\\COMBAT_DESIGN.md Docs\\\\BATTLE_DESIGN.md)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "WebFetch(domain:namu.wiki)",
+      "WebFetch(domain:www.reddit.com)",
+      "WebFetch(domain:oldcynic.com)",
+      "WebFetch(domain:actfirstgames.com)"
     ],
     "additionalDirectories": [
       "c:\\Users\\rkddl\\Desktop\\MyWork\\MurimRunaway\\Docs"

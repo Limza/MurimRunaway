@@ -21,27 +21,57 @@
 |------|----|
 | 문서 종류 | Technical Design Document (TDD) |
 | 대상 | 무림도망자 정식 게임 — 전투 시스템 |
-| 버전 | 0.1 (초안) |
-| 마지막 수정 | 2026-05-04 |
+| 버전 | 0.3 (v4 모바일 오토배틀 로그라이트 피벗) |
+| 마지막 수정 | 2026-05-11 |
 | 의존 문서 | GAME_DESIGN.md (디자인 출발점), CLAUDE.md (코드 컨벤션) |
+
+---
+
+## 0.5. v4 피벗 (2026-05-11) — 모바일 오토배틀 로그라이트
+
+레퍼런스: **옵시디언 나이트** (ActFirst Games) — 사이드스크롤 오토배틀 + 레벨업 카드 드래프트 + 메타 진행. 1인 개발 적합성 평가 결과 v3(Steam 빌드크래프터) 대비 부담 피크 이동(전투 매트릭스 L → 모바일 UI L) + 백엔드 최소화로 결정.
+
+**바뀌는 것 (요약)**:
+- **플랫폼**: Steam(PC) → **Android 우선** (iOS는 v1.0 안정 후).
+- **런 구조**: 15스테이지 단일 분기 → 절차 생성 스테이지 시퀀스. 런 길이 3~5분 기본, 후반 길어짐.
+- **레벨업 시 카드 드래프트 (3택)** 신규 도입 — 매 레벨업 시 스킬/버프 카드 3장 중 1장.
+- **메타 진행 신규** — 인벤토리·장비·영구 강화·골드 (런 간 누적).
+- **비동기 PvP 신규** — 같은 시드 스테이지 도달 거리 비교 (BaaS 리더보드).
+- **MindGame 매트릭스(P5 강공 / P6 오의)는 보스전 한정으로 스코프 축소** — 일반전은 풀 오토배틀, 보스전에서만 수싸움 발현. (결정: 2026-05-11, 옵나형 오토배틀 본질 유지 + v3 깊이 일부 보존)
+- **재능 시스템 격상** — v3 백로그 → v4 차별점 핵심. 옵나의 약점(5~7h 정체감)을 메우는 본체.
+- **컷**: 분파 정렬, 경로 분기, 기연 이벤트, 결말 5분기 — v1.0 범위 외(검토 보류).
+- **컷**: 클랜/협동보스, 가챠/라이브옵스 — 1인 개발 불가능.
+
+**그대로 유지**:
+- 3계층 분리(Domain/Engine/View), 결정성, 시드 기반 RNG, ScriptableObject 데이터.
+- Phase 0~4 본문 — 오토배틀 코어 자체로 살아남음.
+- Phase 9 회피 — 자동전투에서도 시각 피드백 + RNG로 유효.
+
+마일스톤은 [MILESTONES.md](MILESTONES.md) (v4)를 따른다.
 
 ---
 
 ## 1. Goals & Non-goals
 
-### 1.1 Goals
-1. 자동 시전(흐름)과 수동 결정(강공 방어 / 오의 공격 분기)이 **함께** 작동하는 전투 루프.
-2. 적의 강공·오의는 **정보 기반 결정**(오성 hint) — 운이 결과를 100% 좌우하지 않는다.
-3. 재능(천무지체/카피/대종사)에 따라 **자동 흐름의 모양과 결정 비중이 달라진다**.
+### 1.1 Goals (v4)
+1. **풀 오토배틀**(일반전 자동 시전) + **보스전 한정 수싸움**(강공 방어 5택 / 오의 공격 3택)이 함께 작동하는 전투 루프.
+2. 보스전의 강공·오의는 **정보 기반 결정**(오성 hint) — 운이 결과를 100% 좌우하지 않는다.
+3. 재능(천무지체/카피/대종사)에 따라 **자동 흐름의 모양과 카드 드래프트 가중치가 달라진다**.
 4. 코드는 **Domain / Engine / View 3계층 분리** — Domain 단위 테스트 가능.
-5. 모든 RNG는 **시드 기반 결정적** — 같은 입력은 같은 결과 (디버깅·재현성).
+5. 모든 RNG는 **시드 기반 결정적** — 같은 입력은 같은 결과 (디버깅·재현성·비동기 PvP 검증성).
 
 ### 1.2 Non-goals (전투 시스템 외)
-- 월드맵, 인카운트, 카드/무공 획득, 분파 정렬, 보상 — 전투 종료 후 외부 시스템에 결과만 인계.
-- 사운드, 세이브/로드, 설정 메뉴, 멀티언어, 모바일 빌드.
+- 월드맵, 인카운트, 분파 정렬, 결말 분기 — v1.0 범위 외.
+- 사운드, 세이브/로드, 설정 메뉴, 멀티언어 — 폴리시 단계.
+- PC/Steam 빌드 — v4는 Android 우선, iOS 후속.
 - 파티클·카메라 워크·스프라이트 폴리시.
 - 애니메이션 시스템 (placeholder 색+텍스트 유지).
-- 멀티 플레이어, 멀티 캐릭터.
+- 클랜/협동보스/실시간 PvP/가챠 — 1인 개발 부담 회피.
+
+### 1.3 v4 신규 책임 (전투 시스템 경계 안)
+- 런 구조 (스테이지 시퀀스·절차 생성·런 상태 집계) — Phase 11에서 정의.
+- 카드 드래프트 (레벨업 3택) — Phase 12에서 정의.
+- 일반전과 보스전의 구분 — `EnemyData.isBoss` 플래그로 매트릭스 발동 게이팅.
 
 ---
 
@@ -71,10 +101,12 @@
 ### 2.3 폴더 / 네임스페이스
 | 네임스페이스 | 폴더 | 어셈블리 |
 |-------------|------|---------|
-| `MurimRunaway.Battle.Domain` | `Assets/_Project/Scripts/Battle/Domain/` | `MurimRunaway.Battle.Domain.asmdef` |
-| `MurimRunaway.Battle.Engine` | `Assets/_Project/Scripts/Battle/Engine/` | `MurimRunaway.Battle.Engine.asmdef` (Domain 참조) |
-| `MurimRunaway.Battle.View` | `Assets/_Project/Scripts/Battle/View/` | `MurimRunaway.Battle.View.asmdef` (Domain + Engine 참조) |
-| `MurimRunaway.Battle.Tests` | `Assets/_Project/Tests/Battle/` | `MurimRunaway.Battle.Tests.asmdef` (Domain + Engine 참조, View 참조 금지) |
+| `MurimRunaway.Battle.Domain` | `Assets/_Project/Scripts/Battle/Domain/` | `_MurimRunaway.Battle.Domain.asmdef` |
+| `MurimRunaway.Battle.Engine` | `Assets/_Project/Scripts/Battle/Engine/` | `_MurimRunaway.Battle.Engine.asmdef` (Domain 참조) |
+| `MurimRunaway.Battle.View` | `Assets/_Project/Scripts/Battle/View/` | `_MurimRunaway.Battle.View.asmdef` (Domain + Engine 참조) |
+| `MurimRunaway.Battle.Tests` | `Assets/_Project/Tests/Battle/` | `_MurimRunaway.Battle.Tests.asmdef` (Domain + Engine 참조, View 참조 금지) |
+
+> 파일명 `_` prefix는 의도적 — Unity Project 창 정렬 시 폴더 상단에 위치시키기 위함. 어셈블리 정의(`name` 필드) 자체는 `MurimRunaway.Battle.*` 그대로.
 
 ### 2.4 결정성 (Determinism)
 - 엔진 내 모든 RNG는 `IRngService` 한 곳만 통한다.
@@ -149,10 +181,10 @@ public interface IBattleEngine
 - TickService.Pause()/Resume()이 OnTick 발생을 제어한다. Engine은 `Time.timeScale`에 의존하지 않는다 (Engine 계층의 Unity 무관 원칙). View의 게임 일시정지는 IBattleInput을 거쳐 Engine이 자체 결정한다.
 
 **Acceptance**:
-- [ ] 폴더/asmdef/네임스페이스 생성, 컴파일 통과.
-- [ ] EditMode 테스트: TickService Mock 으로 N회 발동 시 dt 합 = N × 0.05 ± 1e-6.
-- [ ] EditMode 테스트: 동일 seed로 RngService 두 번 시뮬, NextFloat01() 100회 결과가 모두 동일.
-- [ ] PlayMode: BattleSceneController가 매 틱 화면 텍스트 카운터를 1씩 증가.
+- [x] 폴더/asmdef/네임스페이스 생성, 컴파일 통과.
+- [x] EditMode 테스트: TickService Mock 으로 N회 발동 시 dt 합 = N × 0.05 ± 1e-6.
+- [x] EditMode 테스트: 동일 seed로 RngService 두 번 시뮬, NextFloat01() 100회 결과가 모두 동일.
+- [x] PlayMode: BattleSceneController가 매 틱 화면 텍스트 카운터를 1씩 증가.
 
 ---
 
@@ -485,9 +517,11 @@ event Action<int actorId> OnActorDeath;
 
 ---
 
-### Phase 5. 강공 분기 (방어 수싸움)
+### Phase 5. 강공 분기 (방어 수싸움) — **보스전 한정 (v4)**
 
-**Goal**: 적의 **강공(Heavy Attack) 차징** → UI 5택 → 매트릭스 판정 → 데미지/효과 적용. GAME_DESIGN.md §6.4 매트릭스를 정식 SSOT로 본 Phase에 흡수.
+**Goal**: **보스 적의** 강공(Heavy Attack) 차징 → UI 5택 → 매트릭스 판정 → 데미지/효과 적용. GAME_DESIGN.md §6.4 매트릭스를 정식 SSOT로 본 Phase에 흡수.
+
+**v4 스코프 (2026-05-11 결정)**: 일반 적은 강공을 트리거하지 않는다. `EnemyData.isBoss == true` 인 적만 강공 사이클 진행. 일반전은 풀 오토배틀(P0~P4 + P9 회피만)로 동작.
 
 **Non-goals**: 오의 공격 분기는 Phase 6.
 
@@ -615,9 +649,11 @@ event Action<DefenseChoice chosen, DefenseMatchup result, int damageDealt, int c
 
 ---
 
-### Phase 6. 오의 분기 (공격 수싸움)
+### Phase 6. 오의 분기 (공격 수싸움) — **보스전 한정 (v4)**
 
-**Goal**: 플레이어가 **오의 핫키** 발동 → 적 선택 → UI 3택 → 매트릭스 판정 → 데미지 적용. §6.5 매트릭스 SSOT.
+**Goal**: 보스전에서 플레이어가 **오의 핫키** 발동 → 적 선택 → UI 3택 → 매트릭스 판정 → 데미지 적용. §6.5 매트릭스 SSOT.
+
+**v4 스코프 (2026-05-11 결정)**: 오의 핫키 발동은 현재 전투가 보스전(`BattleData.isBossBattle == true`)일 때만 활성화. 일반전에서는 오의 스킬도 카드 드래프트 시너지/일반 데미지원으로 동작하되 매트릭스 분기를 거치지 않는다 (`momentumCost` 소비 후 즉시 `Normal` 매치업으로 처리하거나, 자동 시전 결정 트리 안에 흡수 — Phase 6 진입 시 결정).
 
 **Non-goals**: 카피·대종사 재능 특수 효과(Phase 8).
 
@@ -952,6 +988,34 @@ public interface ITelemetrySink
 
 ---
 
+### Phase 11~15. v4 신규 Phase (개요 — 상세 명세는 진입 시점에)
+
+> 본 절은 v4 피벗으로 추가된 Phase의 **개요**만 기록한다. 각 Phase의 본격 명세(Data/Behaviors/Invariants/Acceptance)는 해당 Phase 진입 직전에 본 문서에 추가한다 — CLAUDE.md §1 "코드보다 SSOT 먼저" 규칙.
+
+#### Phase 11. 런 구조 (RunSession)
+- 한 런의 상태 집계: 현재 스테이지 index, 누적 골드/경험치, 적용된 카드 목록, 사망/클리어 조건.
+- 스테이지 시퀀스 정의 (`StageDefinition` SO 또는 절차 생성기) + 적 절차 생성 (`EnemySpawnTable` + RNG).
+- 보스 스테이지 게이팅 (`EnemyData.isBoss` 플래그) — Phase 5/6 매트릭스 발동 조건이 됨.
+
+#### Phase 12. 카드 드래프트 (Level-up Card Draft)
+- `CardData` SO (효과 + 시너지 태그), `CardDraftService` — 레벨업 시 풀에서 3장 추첨(중복 제외, 등급별 가중치).
+- 효과 적용은 기존 자원 4종 / 무공 시스템에 후킹 (자원 max 증가, 시전 가속, 데미지 보너스, 특정 SkillType 강화 등).
+- 오성(Phase 7)이 풀 등급 게이팅에 영향 — Wisdom Tier별 카드 풀 차등.
+
+#### Phase 13. 메타 진행 (Meta Progression)
+- `Inventory`, `Equipment` (슬롯제), `PermanentUpgrade` (MaxHP·기본 공격력 등 영구 스탯), 골드/재화 시스템.
+- 런 사망/클리어 후 획득물 → 인벤토리 반영 → 강화 → 다음 런 통계 차이.
+
+#### Phase 14. 모바일 UI/UX
+- 세로 레이아웃 캔버스, 터치 입력 매핑, 화면 전환(메인→런→인벤→강화→정산).
+- 한국어 폰트 풀세트, UI 키트 폴리시.
+
+#### Phase 15. 비동기 PvP
+- 시드 고정 스테이지(같은 적 시퀀스), 도달 거리/점수 기록, 외부 리더보드(BaaS — Firebase / PlayFab / UGS 중 결정).
+- 결정성(I-3.4, I-5.5)이 검증 기반이 됨.
+
+---
+
 ## 4. 미해결 질문 (Open Questions)
 
 > 답이 나오면 해당 Phase 본문에 흡수 + §5 변경 이력에 한 줄.
@@ -974,6 +1038,8 @@ public interface ITelemetrySink
 |------|------|------|
 | 2026-05-04 | 0.1 | 초안 작성 — 신규 설계, 11 Phase 명세, Open Questions 10건 |
 | 2026-05-04 | 0.2 | 자기 규칙 정리 — 잠정 결정을 결정으로 확정 (P5 강공 큐잉 FIFO, P5/P6 MindGame 시간 정지, P6 타임아웃=Frontal). Q-4/8/9 흡수 후 삭제 + 잔여 Q 번호 재정렬. P3에 Approach→Engage 전이 명시. P9 경공 트리거 조건에 Gyeonggong 무공 슬롯 보유 추가. P1 Player.position=0 고정 명시. P0 Time.timeScale 의존 제거. P5 EnemyActor.heavyAttackCooldown 초기값 명시. |
+| 2026-05-11 | 0.3 | **v4 피벗 — 모바일 오토배틀 로그라이트** (옵시디언 나이트 레퍼런스). §0.5 피벗 섹션 신설, §1 Goals/Non-goals v4 갱신(모바일 우선, PC 제외, 분파/경로 v1.0 외). **Phase 5/6 강공·오의 매트릭스를 보스전 한정으로 스코프 축소** (`EnemyData.isBoss` 게이팅). Phase 11~15 신규 추가(런 구조, 카드 드래프트, 메타 진행, 모바일 UI, 비동기 PvP) — 개요만, 상세는 진입 시점에. |
+| 2026-05-11 | 0.3.1 | **Phase 0 완료** — Foundation 산출물: asmdef 4종(Domain/Engine/View/Tests), `ITickService`/`IRngService` 인터페이스 + Mock·실구현, 빈 `BattleEngine`, `BattleSceneController` 카운터 표시, EditMode 테스트 2종(TickServiceTests, RngServiceTests). Phase 1(Actor & 거리축) 진입 가능. |
 
 ---
 

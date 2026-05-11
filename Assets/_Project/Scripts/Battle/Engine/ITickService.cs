@@ -6,8 +6,5 @@ namespace MurimRunaway.Battle.Engine
     public interface ITickService
     {
         event Action<float> OnTick;
-        void Pause();
-        void Resume();
-        bool IsRunning { get; }
     }
 }
