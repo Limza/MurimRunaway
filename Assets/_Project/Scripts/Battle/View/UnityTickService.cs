@@ -10,7 +10,7 @@ namespace MurimRunaway.Battle.View
         private const float TickIntervalSeconds = 0.05f;
         private float _elapsedSinceLastTick;
 
-        public event Action<float> OnTick;
+        public event Action<float> Ticked;
 
         private void Update()
         {
@@ -19,7 +19,7 @@ namespace MurimRunaway.Battle.View
             while (_elapsedSinceLastTick >= TickIntervalSeconds)
             {
                 _elapsedSinceLastTick -= TickIntervalSeconds;
-                OnTick?.Invoke(TickIntervalSeconds);
+                Ticked?.Invoke(TickIntervalSeconds);
             }
         }
     }

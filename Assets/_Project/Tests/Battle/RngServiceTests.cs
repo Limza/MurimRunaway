@@ -6,7 +6,7 @@ namespace MurimRunaway.Battle.Tests
     public class RngServiceTests
     {
         [Test]
-        public void SameSeed_ProducesSameSequence()
+        public void 같은_시드로_초기화하면_같은_난수_시퀀스가_나온다()
         {
             var a = new RngService();
             var b = new RngService();
