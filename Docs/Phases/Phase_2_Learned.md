@@ -8,36 +8,36 @@
 
 **한 줄 정의**: 어떤 데이터에 가해지는 모든 변경을 **하나의 인터페이스/메서드 집합**만 통과시켜, 변경 규칙(클램프·atomic·이벤트 발행)을 한 곳에서 강제하는 패턴.
 
-Phase 2에서 Player의 자원(Inwoo·Momentum·Wisdom)은 절대 직접 쓰지 않는다. 모든 변경은 `IResourceMutator.SpendInwoo`/`GainInwoo`/... 만 통과.
+Phase 2에서 Player의 자원(Mana)은 절대 직접 쓰지 않는다. 모든 변경은 `IResourceMutator.SpendMana`/`GainMana` 만 통과.
 
 **왜 이렇게까지 강제하는가**:
-1. **불변식 보장이 한 곳에서 끝난다** — `0 ≤ inwoo ≤ maxInwoo` 클램프 로직이 mutator 안에만 존재. 호출처 100곳에서 `if (next > max) next = max;`를 반복할 필요 없음.
+1. **불변식 보장이 한 곳에서 끝난다** — `0 ≤ mana ≤ maxMana` 클램프 로직이 mutator 안에만 존재. 호출처 100곳에서 `if (next > max) next = max;`를 반복할 필요 없음.
 2. **추적 가능성** — Phase 11+에서 "이번 런에 내공을 가장 많이 소비한 스킬은?" 같은 telemetry를 붙일 때 mutator 메서드에 로깅 한 줄만 추가하면 끝.
-3. **Atomic 보장** — `SpendInwoo`가 부족 시 값을 안 바꾸고 false를 반환하는 atomic 규약은, 호출처에서 "비용 깎고 → 스킬 발동 실패 → 비용 롤백" 같은 두 단계 처리를 안 해도 되게 만든다.
+3. **Atomic 보장** — `SpendMana`가 부족 시 값을 안 바꾸고 false를 반환하는 atomic 규약은, 호출처에서 "비용 깎고 → 스킬 발동 실패 → 비용 롤백" 같은 두 단계 처리를 안 해도 되게 만든다.
 
 **언제 이 패턴을 도입할까**: 같은 데이터에 변경 코드가 3곳 이상에서 보이거나, 변경마다 클램프/검증이 필요할 때. Phase 1엔 Player 자원이 없어 불필요했고, Phase 3에서 Skill 시전이 호출처가 되는 시점에 정확히 필요해진다 — Phase 2가 "한 단계 앞서 만들어두는" 자리.
 
 ---
 
-## 2. Atomic 연산 — `SpendInwoo`의 all-or-nothing
+## 2. Atomic 연산 — `SpendMana`의 all-or-nothing
 
 ```csharp
-public bool SpendInwoo(int amount)
+public bool SpendMana(int amount)
 {
-    if (amount > _player.Inwoo)
+    if (amount > _player.Mana)
         return false;
-    _player.Inwoo -= amount;
+    _player.Mana -= amount;
     return true;
 }
 ```
 
-이게 atomic이라고 부르는 이유: **변경이 성공하거나 아예 일어나지 않거나**. 부족 시 `_player.Inwoo`는 절대 안 바뀐다.
+이게 atomic이라고 부르는 이유: **변경이 성공하거나 아예 일어나지 않거나**. 부족 시 `_player.Mana`는 절대 안 바뀐다.
 
 대안 — "있는 만큼만 깎기"도 가능:
 ```csharp
-public int SpendInwooBestEffort(int amount) {
-    var spent = Math.Min(amount, _player.Inwoo);
-    _player.Inwoo -= spent;
+public int SpendManaBestEffort(int amount) {
+    var spent = Math.Min(amount, _player.Mana);
+    _player.Mana -= spent;
     return spent;
 }
 ```
@@ -46,20 +46,20 @@ public int SpendInwooBestEffort(int amount) {
 
 **부산 효과**: 호출처가 if 한 줄로 깔끔해진다.
 ```csharp
-if (mutator.SpendInwoo(skill.InwooCost))
+if (mutator.SpendMana(skill.ManaCost))
     Cast(skill);
 // 실패하면 자원도 그대로, 상태도 그대로.
 ```
 
 ---
 
-## 3. 클램프 vs 거절 — `GainInwoo`는 클램프, `SpendInwoo`는 거절
+## 3. 클램프 vs 거절 — `GainMana`는 클램프, `SpendMana`는 거절
 
-같은 자원에 대해 한쪽은 silent 클램프(`GainInwoo` over max → max로), 다른쪽은 거절(`SpendInwoo` under 0 → false).
+같은 자원에 대해 한쪽은 silent 클램프(`GainMana` over max → max로), 다른쪽은 거절(`SpendMana` under 0 → false).
 
 **왜 비대칭인가**:
-- **GainInwoo** 호출처는 보통 "회복 효과" — `"드링크 사용 → 내공 +20"`. 만약 현재 90/100인데 +20을 시도하면, 호출처가 "10만 들어가고 10은 버려졌다"를 알아야 할 일이 거의 없다. **결과적으로 max에 닿았다는 사실만 중요**. 그래서 void + silent.
-- **SpendInwoo** 호출처는 "시전 시도" — 비용을 못 내면 **시전 자체가 일어나면 안 된다**. 즉 "낼 수 있었나?"가 호출 흐름의 분기 조건이 된다. 그래서 bool 반환.
+- **GainMana** 호출처는 보통 "회복 효과" — `"드링크 사용 → 내공 +20"`. 만약 현재 90/100인데 +20을 시도하면, 호출처가 "10만 들어가고 10은 버려졌다"를 알아야 할 일이 거의 없다. **결과적으로 max에 닿았다는 사실만 중요**. 그래서 void + silent.
+- **SpendMana** 호출처는 "시전 시도" — 비용을 못 내면 **시전 자체가 일어나면 안 된다**. 즉 "낼 수 있었나?"가 호출 흐름의 분기 조건이 된다. 그래서 bool 반환.
 
 이 비대칭은 도메인 관찰 결과지 일반 규칙이 아니다. 다른 도메인(예: 재화 적립 한도 도달 시 알림 띄우기)에선 Gain에도 결과가 필요할 수 있다.
 
@@ -70,7 +70,7 @@ if (mutator.SpendInwoo(skill.InwooCost))
 SSOT [BATTLE_DESIGN §3 Phase 2](../BATTLE_DESIGN.md) Behavior 3:
 > 자원이 변경되면 Snapshot의 **다음 발행**에 반영 (즉시 이벤트 X — Snapshot 일관성 우선).
 
-대안 — 자원 변경마다 즉시 `OnInwooChanged` 이벤트를 쏘는 것도 가능. 그런데 한 Tick 안에서 자원이 3번 바뀌면 View가 3번 갱신되고, 그 사이 중간 상태가 화면에 잠깐 보일 수 있다. **결정론 시뮬레이션은 한 Tick = 한 외부 관측**이 일관성을 가장 단순하게 만든다.
+대안 — 자원 변경마다 즉시 `OnManaChanged` 이벤트를 쏘는 것도 가능. 그런데 한 Tick 안에서 자원이 3번 바뀌면 View가 3번 갱신되고, 그 사이 중간 상태가 화면에 잠깐 보일 수 있다. **결정론 시뮬레이션은 한 Tick = 한 외부 관측**이 일관성을 가장 단순하게 만든다.
 
 **다음 스냅샷에만 반영**한다는 약속이 있으면:
 - View는 매 틱 끝의 단일 BattleSnapshot만 처리하면 됨.
@@ -83,7 +83,7 @@ SSOT [BATTLE_DESIGN §3 Phase 2](../BATTLE_DESIGN.md) Behavior 3:
 
 ## 5. `ActorView`에 한쪽 전용 필드를 두는 비대칭
 
-Phase 1의 [§1.6 ActorView](Phase_1_Guide.md)는 Player/Enemy가 같은 struct를 공유했다. Phase 2에서 Inwoo·Momentum·Wisdom 5필드가 Player 한정으로 추가되면서 Enemy 케이스에선 0으로 떨어진다.
+Phase 1의 [§1.6 ActorView](Phase_1_Guide.md)는 Player/Enemy가 같은 struct를 공유했다. Phase 2에서 Mana/MaxMana 2필드가 Player 한정으로 추가되면서 Enemy 케이스에선 0으로 떨어진다.
 
 **왜 EnemyView를 따로 만들지 않았는가**:
 1. View 측 코드가 단일 `ActorView[]`만 순회하면 단순. 두 종류면 `if (player) playerView else enemyView` 같은 분기가 매번 생긴다.
@@ -113,11 +113,11 @@ Phase 1의 [§1.6 ActorView](Phase_1_Guide.md)는 Player/Enemy가 같은 struct�
 
 ## 7. ScriptableObject는 자원 컨테이너로 쓰면 안 된다
 
-`EnemyData`는 SO. 그런데 `PlayerActor.Inwoo`/`MaxInwoo`는 SO가 아니라 런타임 POCO 필드.
+`EnemyData`는 SO. 그런데 `PlayerActor.Mana`/`MaxMana`는 SO가 아니라 런타임 POCO 필드.
 
 **왜 SO에 자원을 두지 않는가**:
 - SO는 **에셋 파일**. 런타임에 필드를 변경하면 에디터에선 디스크에 반영된다 (Play 모드 종료 후에도 남음).
-- Phase 2 학습 노트의 핵심 — **런타임 가변 값은 절대 SO에 두지 않는다**. 시작값(maxInwoo의 디폴트=100)은 `PlayerStartData`(POCO) 또는 향후 메타 강화 SO의 baseline 필드로.
+- Phase 2 학습 노트의 핵심 — **런타임 가변 값은 절대 SO에 두지 않는다**. 시작값(maxMana의 디폴트=100)은 `PlayerStartData`(POCO) 또는 향후 메타 강화 SO의 baseline 필드로.
 
 이건 [Phase_1_Learned.md §3](Phase_1_Learned.md)에서 EnemyData를 직접 mutate하지 않고 EnemyActor로 복사한 것과 같은 원리. **"읽기 전용 데이터" vs "런타임 상태"의 분리**.
 
@@ -129,7 +129,7 @@ ActorView 생성자:
 ```csharp
 if (actor is PlayerActor player)
 {
-    Inwoo = player.Inwoo;
+    Mana = player.Mana;
     ...
 }
 ```
@@ -139,7 +139,7 @@ C# 7+의 type pattern matching. `is`로 타입 검사 + 변수 캐스팅을 한 
 if (actor is PlayerActor)
 {
     var player = (PlayerActor)actor;
-    Inwoo = player.Inwoo;
+    Mana = player.Mana;
     ...
 }
 ```
@@ -152,7 +152,7 @@ if (actor is PlayerActor)
 ## 9. 학습 체크 — Phase 2 마치고 답할 수 있어야 할 것들
 
 - [ ] `IResourceMutator`로 모든 자원 변경을 통과시키는 이유 3가지?
-- [ ] `SpendInwoo`가 atomic이고 `GainInwoo`가 silent clamp인 비대칭의 이유는?
+- [ ] `SpendMana`가 atomic이고 `GainMana`가 silent clamp인 비대칭의 이유는?
 - [ ] 자원 변경이 즉시 이벤트가 아니라 다음 스냅샷에 실리는 이유는?
 - [ ] `ActorView`에 Enemy가 안 쓰는 자원 필드를 두는 게 왜 합리적인가? 언제 분리?
 - [ ] VContainer를 Phase 1이 아닌 Phase 2에서 도입한 이유는?

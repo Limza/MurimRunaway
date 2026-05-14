@@ -331,35 +331,35 @@ public readonly struct ActorView
 `PlayerActor` (Actor 상속, Domain):
 | 필드 | 타입 | 단위 | 범위 | 디폴트 | 설명 |
 |------|------|------|------|--------|------|
-| inwoo | int | 내공 | [0, maxInwoo] | 50 | 시전 비용 자원 |
-| maxInwoo | int | 내공 | [1, ∞) | 100 | 최대 내공 |
+| mana | int | 내공 | [0, maxMana] | 50 | 시전 비용 자원 |
+| maxMana | int | 내공 | [1, ∞) | 100 | 최대 내공 |
 
 ActorView 확장 (Player 한정):
 | 필드 추가 | |
 |----------|--|
-| Inwoo, MaxInwoo | (Enemy ActorView에는 없음) |
+| Mana, MaxMana | (Enemy ActorView에는 없음) |
 
 **State machine**: 변경 없음.
 
 **Behaviors**:
 1. `IResourceMutator` Engine 내부 인터페이스 — 자원 변경의 단일 진입점.
-   - `SpendInwoo(int amount)` — `amount > inwoo` 시 `false` 반환, 변경 없음 (atomic).
-   - `GainInwoo(int amount)` — `min(inwoo + amount, maxInwoo)` 로 클램프 (silent).
+   - `SpendMana(int amount)` — `amount > mana` 시 `false` 반환, 변경 없음 (atomic).
+   - `GainMana(int amount)` — `min(mana + amount, maxMana)` 로 클램프 (silent).
 2. 모든 자원 변경은 `IResourceMutator`만 통과 — 다른 코드에서 직접 필드 쓰기 금지 (코드 리뷰 시 검증).
 3. 자원이 변경되면 Snapshot의 다음 발행에 반영 (즉시 이벤트 X — Snapshot 일관성 우선).
 
 **Formulas**: 없음 (변경 룰만).
 
 **Invariants**:
-- I-2.1: `0 ≤ inwoo ≤ maxInwoo`.
-- I-2.2: SpendInwoo가 `false` 반환했을 때 inwoo는 변경되지 않음 (atomic).
+- I-2.1: `0 ≤ mana ≤ maxMana`.
+- I-2.2: SpendMana가 `false` 반환했을 때 mana는 변경되지 않음 (atomic).
 
 **Edge**:
-- GainInwoo가 maxInwoo를 초과하려 할 때 → `min(inwoo + amount, maxInwoo)` 로 클램프 (silent).
+- GainMana가 maxMana를 초과하려 할 때 → `min(mana + amount, maxMana)` 로 클램프 (silent).
 
 **Acceptance**:
-- [ ] EditMode: SpendInwoo로 0 미만이 되는 시도가 false 반환 + 값 불변.
-- [ ] EditMode: GainInwoo가 maxInwoo 초과 시 maxInwoo로 클램프.
+- [ ] EditMode: SpendMana로 0 미만이 되는 시도가 false 반환 + 값 불변.
+- [ ] EditMode: GainMana가 maxMana 초과 시 maxMana로 클램프.
 - [ ] PlayMode: 화면에 HP·내공 게이지 표시.
 - [ ] PlayMode: VContainer LifetimeScope에서 의존성 주입 동작 (Phase 1 흐름 회귀 없음).
 
@@ -395,7 +395,7 @@ ActorView 확장 (Player 한정):
 | nameKey | string | — | L10n 키 (`skill.<id>.name`) — Unity Localization String Table 조회 |
 | descKey | string | — | L10n 키 (`skill.<id>.desc`) |
 | type | SkillType | Choseok | 분류 |
-| inwooCost | int | 5 | 시전 비용 |
+| manaCost | int | 5 | 시전 비용 |
 | cooldownSec | float | 1.5 | 쿨타임 |
 | preferredRange | SkillRange | Close | 선호 거리 |
 | momentumGainOnCast | int | 1 | 시전 성공 시 기세 획득 |
@@ -425,12 +425,12 @@ ActorView 확장 (Player 한정):
 3. **슬롯 순회 (slot order, 0..N-1)**:
    - 슬롯이 비었으면 skip.
    - `cooldowns[i] > 0` 이면 skip.
-   - `inwoo < skill.inwooCost` 이면 skip.
+   - `mana < skill.manaCost` 이면 skip.
    - `IsInPreferredRange(target.position, skill.preferredRange) == false` 이면 skip.
    - skill.type == Simbeop 이고 효과가 이미 활성 중이면 skip (중복 방지).
    - **여기까지 통과한 첫 스킬을 시전하고 break.**
 4. **시전 처리**:
-   - SpendInwoo(skill.inwooCost). 실패 시 step 종료 (race condition 안전).
+   - SpendMana(skill.manaCost). 실패 시 step 종료 (race condition 안전).
    - cooldowns[i] = skill.cooldownSec.
    - GainMomentum(skill.momentumGainOnCast).
    - skill.effects 적용 (Phase 4에서 정의).
@@ -454,7 +454,7 @@ event Action<int /*casterId*/, string /*skillId*/, int /*targetId*/> OnSkillCast
 
 **Invariants**:
 - I-3.1: 한 Tick에 한 actor당 시전 1회 이하.
-- I-3.2: 시전이 일어났다면 inwoo는 정확히 `inwooCost` 만큼 감소했다.
+- I-3.2: 시전이 일어났다면 mana는 정확히 `manaCost` 만큼 감소했다.
 - I-3.3: 쿨다운 중인 스킬은 시전되지 않는다 (cooldowns[i] > 0).
 - I-3.4: 결정성: 같은 seed/BattleStartData/SkillSlots → 같은 OnSkillCast 시퀀스.
 
@@ -888,7 +888,7 @@ public interface IChoicePoolProvider
 | nameKey | string | — | L10n 키 (`talent.<id>.name`) |
 | descKey | string | — | L10n 키 (`talent.<id>.desc`) |
 | startingMaxHp | int | 100 | 시작 최대 HP |
-| startingMaxInwoo | int | 100 | 시작 최대 내공 |
+| startingMaxMana | int | 100 | 시작 최대 내공 |
 | startingMomentum | int | 0 | 매 전투 시작 시 기세 |
 | startingSkills | SkillData[] | — | 시작 무공 슬롯 |
 | specialBehaviorId | string | "" | 재능 특수 능력 식별자 (Phase 8.1+) |
@@ -896,7 +896,7 @@ public interface IChoicePoolProvider
 > **`startingWisdom` 제거 (v0.4.2)**: 오성은 메타 패시브 슬롯(Phase 11+)으로 이관. 재능별 wisdom 차별화는 "재능이 메타 패시브 풀에 가하는 가중치"로 표현 (Phase 8/Phase 12 연계, Open Q-18). 본 Phase에선 wisdom 시작값을 다루지 않음.
 
 **3재능 시작값** (SSOT):
-| 재능 | maxHp | maxInwoo | startingMomentum | 시작 무공 풀 (요지) |
+| 재능 | maxHp | maxMana | startingMomentum | 시작 무공 풀 (요지) |
 |------|-------|----------|------------------|---------------------|
 | 천무지체 (tianmu) | 100 | 100 | 0 | 균형 (초식 1 + 심법 1 + 오의 1) |
 | 카피 (copy)       | 100 | 100 | 0 | 빈 슬롯 많음 (시작 무공 1) |

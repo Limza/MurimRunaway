@@ -23,7 +23,7 @@
 | 작업 브랜치 | `feature/phase-2` 권장 |
 
 >
-> Phase 2는 자원 **컨테이너만** 만든다. 자원을 소비/회복하는 룰(SpendInwoo를 부르는 코드)은 Phase 3 이후. 본 Phase에선 mutator를 노출만 해두고 호출처가 없다.
+> Phase 2는 자원 **컨테이너만** 만든다. 자원을 소비/회복하는 룰(SpendMana를 부르는 코드)은 Phase 3 이후. 본 Phase에선 mutator를 노출만 해두고 호출처가 없다.
 >
 
 ---
@@ -48,8 +48,8 @@ namespace MurimRunaway.Battle.Domain
         public float MoveSpeed;
 
         // 내공 — Phase 2 추가. 변경은 IResourceMutator만 통과 ([§2.1](#21-iresourcemutator)).
-        public int Inwoo;
-        public int MaxInwoo;
+        public int Mana;
+        public int MaxMana;
     }
 }
 ```
@@ -71,13 +71,13 @@ namespace MurimRunaway.Battle.Domain
         public float AttackRange = 20f;
 
         // 내공 시작값 — SSOT 표의 디폴트 따름
-        public int MaxInwoo = 100;
-        public int StartingInwoo = 50;
+        public int MaxMana = 100;
+        public int StartingMana = 50;
     }
 }
 ```
 
-> SSOT는 `inwoo` 디폴트=50, `maxInwoo`=100. 시작값과 최댓값을 같은 자료에 두지 않으면 Phase 11+에서 메타 강화(maxInwoo +10)와 현재값을 별개 축으로 조작하기 어려워진다.
+> SSOT는 `mana` 디폴트=50, `maxMana`=100. 시작값과 최댓값을 같은 자료에 두지 않으면 Phase 11+에서 메타 강화(maxMana +10)와 현재값을 별개 축으로 조작하기 어려워진다.
 
 ### 1.3 `ActorView` — Player 한정 내공 필드 추가
 
@@ -99,8 +99,8 @@ namespace MurimRunaway.Battle.Domain
         public readonly ActorState State;
 
         // Player 한정 — Enemy는 0 (View가 IsPlayer로 게이팅).
-        public readonly int Inwoo;
-        public readonly int MaxInwoo;
+        public readonly int Mana;
+        public readonly int MaxMana;
 
         public ActorView(Actor actor)
         {
@@ -113,13 +113,13 @@ namespace MurimRunaway.Battle.Domain
 
             if (actor is PlayerActor player)
             {
-                Inwoo = player.Inwoo;
-                MaxInwoo = player.MaxInwoo;
+                Mana = player.Mana;
+                MaxMana = player.MaxMana;
             }
             else
             {
-                Inwoo = 0;
-                MaxInwoo = 0;
+                Mana = 0;
+                MaxMana = 0;
             }
         }
     }
@@ -147,11 +147,11 @@ namespace MurimRunaway.Battle.Engine
     /// <summary>자원 변경의 단일 진입점. 모든 자원 변경은 이 인터페이스만 통과한다.</summary>
     public interface IResourceMutator
     {
-        /// <summary>amount만큼 내공 소비. amount > 현재 inwoo면 false 반환, 값 불변(atomic).</summary>
-        bool SpendInwoo(int amount);
+        /// <summary>amount만큼 내공 소비. amount > 현재 mana면 false 반환, 값 불변(atomic).</summary>
+        bool SpendMana(int amount);
 
-        /// <summary>maxInwoo로 클램프. silent.</summary>
-        void GainInwoo(int amount);
+        /// <summary>maxMana로 클램프. silent.</summary>
+        void GainMana(int amount);
     }
 }
 ```
@@ -163,8 +163,8 @@ namespace MurimRunaway.Battle.Engine
 **핵심 변경**:
 1. `BattleEngine : IResourceMutator` 구현.
 2. `Setup` 시 `PlayerStartData`의 내공 시작값을 `PlayerActor`에 복사.
-3. `SpendInwoo`는 atomic — 부족 시 값 불변 + false 반환.
-4. `GainInwoo`는 maxInwoo로 클램프.
+3. `SpendMana`는 atomic — 부족 시 값 불변 + false 반환.
+4. `GainMana`는 maxMana로 클램프.
 
 ### `Scripts/Battle/Engine/BattleEngine.cs` — 추가분만
 
@@ -192,8 +192,8 @@ public sealed class BattleEngine : IResourceMutator
             SourceId = "player",
 
             // Phase 2 추가
-            Inwoo = data.Player.StartingInwoo,
-            MaxInwoo = data.Player.MaxInwoo,
+            Mana = data.Player.StartingMana,
+            MaxMana = data.Player.MaxMana,
         };
 
         _enemies = data.Enemies
@@ -211,18 +211,18 @@ public sealed class BattleEngine : IResourceMutator
 
     // ── IResourceMutator ──────────────────────────────────────────────
 
-    public bool SpendInwoo(int amount)
+    public bool SpendMana(int amount)
     {
-        if (amount > _player.Inwoo)
+        if (amount > _player.Mana)
             return false;
-        _player.Inwoo -= amount;
+        _player.Mana -= amount;
         return true;
     }
 
-    public void GainInwoo(int amount)
+    public void GainMana(int amount)
     {
-        var next = _player.Inwoo + amount;
-        _player.Inwoo = next > _player.MaxInwoo ? _player.MaxInwoo : next;
+        var next = _player.Mana + amount;
+        _player.Mana = next > _player.MaxMana ? _player.MaxMana : next;
     }
 }
 ```
@@ -243,7 +243,7 @@ public sealed class BattleEngine : IResourceMutator
   - 세로 배치 (Vertical Layout Group 권장. 없으면 손수 정렬)
   - 자식 2개:
     - `HpBar` (TMP_Text + Image 게이지 — 빨강)
-    - `InwooBar` (파랑)
+    - `ManaBar` (파랑)
 
 각 Bar는 다음 구조:
 ```
@@ -254,7 +254,7 @@ HpBar (RectTransform)
  └ ValueText (TMP_Text)    "50 / 50"
 ```
 
-> **HpBar를 Prefab으로 만들고 1번 복제**해 라벨/색만 바꿔 InwooBar로 쓴다. Phase 2 placeholder 수준이라 정교한 UI는 Phase 14에서 다시 함. Phase 3에 기세 게이지가 추가되면 같은 Prefab을 한 번 더 복제.
+> **HpBar를 Prefab으로 만들고 1번 복제**해 라벨/색만 바꿔 ManaBar로 쓴다. Phase 2 placeholder 수준이라 정교한 UI는 Phase 14에서 다시 함. Phase 3에 기세 게이지가 추가되면 같은 Prefab을 한 번 더 복제.
 
 ### 3.2 `ResourceBar` MonoBehaviour (작은 헬퍼)
 
@@ -300,7 +300,7 @@ public sealed class BattleSceneController : MonoBehaviour
     // ... 기존 [SerializeField] 슬롯 유지 ...
 
     [SerializeField] private ResourceBar _hpBar;
-    [SerializeField] private ResourceBar _inwooBar;
+    [SerializeField] private ResourceBar _manaBar;
 
     // ... 기존 BattleEngine·_enemyMarkers·_worldMax 유지 ...
 
@@ -317,7 +317,7 @@ public sealed class BattleSceneController : MonoBehaviour
             if (actor.IsPlayer)
             {
                 _hpBar.SetValue(actor.Hp, actor.MaxHp);
-                _inwooBar.SetValue(actor.Inwoo, actor.MaxInwoo);
+                _manaBar.SetValue(actor.Mana, actor.MaxMana);
             }
         }
     }
@@ -329,9 +329,9 @@ public sealed class BattleSceneController : MonoBehaviour
 | 슬롯 | 연결할 대상 |
 |------|------------|
 | `_hpBar` | `ResourcePanel/HpBar`에 붙은 `ResourceBar` |
-| `_inwooBar` | `ResourcePanel/InwooBar` |
+| `_manaBar` | `ResourcePanel/ManaBar` |
 
-`PlayerStartData` 시작값은 일단 디폴트(`Inwoo=50/100`) 그대로. SerializeField로 노출할지는 Phase 3에서 Skill 비용 튜닝 시작할 때 결정.
+`PlayerStartData` 시작값은 일단 디폴트(`Mana=50/100`) 그대로. SerializeField로 노출할지는 Phase 3에서 Skill 비용 튜닝 시작할 때 결정.
 
 ### 3.5 Play 확인
 
@@ -406,7 +406,7 @@ public sealed class BattleSceneController : MonoBehaviour
     [SerializeField] private RectTransform _playerMarker;
     [SerializeField] private RectTransform _enemyMarkerPrefab;
     [SerializeField] private ResourceBar _hpBar;
-    [SerializeField] private ResourceBar _inwooBar;
+    [SerializeField] private ResourceBar _manaBar;
     [SerializeField] private ResourceBar _momentumBar;
     [SerializeField] private TMP_Text _wisdomText;
 
@@ -469,8 +469,8 @@ public sealed class BattleSceneController : MonoBehaviour
 ### 5.1 `ResourceMutatorTests.cs`
 
 **검증**:
-- SpendInwoo 부족 시 false + 값 불변 (I-2.2).
-- GainInwoo가 maxInwoo로 클램프 (Edge).
+- SpendMana 부족 시 false + 값 불변 (I-2.2).
+- GainMana가 maxMana로 클램프 (Edge).
 
 ```csharp
 using NUnit.Framework;
@@ -490,7 +490,7 @@ namespace MurimRunaway.Battle.Tests
                 Player = new PlayerStartData
                 {
                     MaxHp = 50, MoveSpeed = 5f, AttackRange = 20f,
-                    MaxInwoo = 100, StartingInwoo = 50,
+                    MaxMana = 100, StartingMana = 50,
                 },
                 Enemies = new EnemyData[0],
             });
@@ -498,33 +498,33 @@ namespace MurimRunaway.Battle.Tests
         }
 
         [Test]
-        public void 내공이_부족하면_SpendInwoo는_false를_반환하고_값은_그대로다()
+        public void 내공이_부족하면_SpendMana는_false를_반환하고_값은_그대로다()
         {
             IResourceMutator mutator = CreateEngine();
 
-            var ok = mutator.SpendInwoo(60); // 시작 50, 60 시도
+            var ok = mutator.SpendMana(60); // 시작 50, 60 시도
 
             Assert.IsFalse(ok);
             // 스냅샷으로 검증
             ((BattleEngine)mutator).Start();
             BattleSnapshot snapshot = default;
             ((BattleEngine)mutator).SnapshotPublished += s => snapshot = s;
-            Assert.AreEqual(50, snapshot.Actors[0].Inwoo);
+            Assert.AreEqual(50, snapshot.Actors[0].Mana);
         }
 
         [Test]
-        public void GainInwoo는_maxInwoo로_클램프된다()
+        public void GainMana는_maxMana로_클램프된다()
         {
             var engine = CreateEngine();
             IResourceMutator mutator = engine;
 
-            mutator.GainInwoo(80); // 50 + 80 = 130 → 100으로 클램프
+            mutator.GainMana(80); // 50 + 80 = 130 → 100으로 클램프
 
             BattleSnapshot snapshot = default;
             engine.SnapshotPublished += s => snapshot = s;
             engine.Start();
 
-            Assert.AreEqual(100, snapshot.Actors[0].Inwoo);
+            Assert.AreEqual(100, snapshot.Actors[0].Mana);
         }
     }
 }
@@ -538,8 +538,8 @@ namespace MurimRunaway.Battle.Tests
 
 [BATTLE_DESIGN §3 Phase 2 Acceptance](../BATTLE_DESIGN.md) + M2 추가:
 
-- [ ] EditMode: SpendInwoo로 0 미만이 되는 시도가 false 반환 + 값 불변. (§5.1)
-- [ ] EditMode: GainInwoo가 maxInwoo 초과 시 maxInwoo로 클램프. (§5.1)
+- [ ] EditMode: SpendMana로 0 미만이 되는 시도가 false 반환 + 값 불변. (§5.1)
+- [ ] EditMode: GainMana가 maxMana 초과 시 maxMana로 클램프. (§5.1)
 - [ ] PlayMode: 화면에 HP·내공 게이지 표시.
 - [ ] PlayMode: VContainer LifetimeScope에서 의존성 주입 동작 확인 — Play 시 NullReferenceException 없이 Phase 1 흐름 그대로 재현.
 
@@ -547,9 +547,9 @@ namespace MurimRunaway.Battle.Tests
 
 ## 7. 흔한 함정
 
-- **PlayerActor.Inwoo 직접 쓰기** — `engine._player.Inwoo -= 5` 같은 직접 쓰기는 mutator를 우회. 코드 리뷰 시 grep으로 검출 (`\.Inwoo\s*[-+*/]?=` 패턴이 BattleEngine.cs의 mutator 메서드 외에 나타나면 위반).
-- **GainInwoo의 음수 인자** — `GainInwoo(-5)`는 silent로 inwoo를 5 깎는다. 의도된 동작이 아니라면 호출처 버그. SpendInwoo로 명시할 것. 본 Phase에선 가드 안 추가(Phase 4 데미지 계산이 들어올 때 통합 검토).
-- **Enemy ActorView의 Inwoo 필드를 게이지에 묶기** — Enemy는 Inwoo 0. `IsPlayer` 게이팅 누락하면 Enemy 마커 옆에 빈 게이지가 그려짐.
+- **PlayerActor.Mana 직접 쓰기** — `engine._player.Mana -= 5` 같은 직접 쓰기는 mutator를 우회. 코드 리뷰 시 grep으로 검출 (`\.Mana\s*[-+*/]?=` 패턴이 BattleEngine.cs의 mutator 메서드 외에 나타나면 위반).
+- **GainMana의 음수 인자** — `GainMana(-5)`는 silent로 mana를 5 깎는다. 의도된 동작이 아니라면 호출처 버그. SpendMana로 명시할 것. 본 Phase에선 가드 안 추가(Phase 4 데미지 계산이 들어올 때 통합 검토).
+- **Enemy ActorView의 Mana 필드를 게이지에 묶기** — Enemy는 Mana 0. `IsPlayer` 게이팅 누락하면 Enemy 마커 옆에 빈 게이지가 그려짐.
 - **LifetimeScope에 Engine을 트랜션트로 등록** — Singleton이어야 매 틱 같은 인스턴스. `Lifetime.Transient`로 두면 `Construct`가 받는 Engine과 `Setup`/`Start`를 호출한 Engine이 달라질 수 있음.
 - **`[Inject]` 메서드를 `private`으로** — VContainer는 public/private 모두 reflect하지만 IL2CPP 빌드(모바일)에서 stripping될 위험. `public void Construct(...)`로 두면 안전.
 
