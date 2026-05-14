@@ -1,11 +1,13 @@
-# Phase 2 작업 가이드 — 자원 4종 (HP / 내공 / 기세 / 오성) + VContainer 도입
+# Phase 2 작업 가이드 — 자원 2종 (HP / 내공) + VContainer 도입
 
 >
-> **목표 한 줄**: Player에 자원 4종(HP·내공·기세·오성)을 추가하고, 모든 자원 변경을 단일 진입점(`IResourceMutator`)으로 통과시킨다. 매 Snapshot이 자원 현재값을 담는다. 추가로 Phase 1까지 `BattleSceneController.Start()`에서 수동 조립하던 의존성(Tick·Rng·Engine)을 VContainer LifetimeScope로 위임한다.
+> **목표 한 줄**: Player에 내공 자원을 추가하고(HP는 Phase 1에 이미 있음), 모든 자원 변경을 단일 진입점(`IResourceMutator`)으로 통과시킨다. 매 Snapshot이 자원 현재값을 담는다. 추가로 Phase 1까지 `BattleSceneController.Start()`에서 수동 조립하던 의존성(Tick·Rng·Engine)을 VContainer LifetimeScope로 위임한다.
 >
 > **참조 SSOT**: [BATTLE_DESIGN.md §3 Phase 2](../BATTLE_DESIGN.md) + [MILESTONES.md M2](../MILESTONES.md) — 본 가이드는 SSOT가 아니라 작업 절차 안내. 사양이 다르면 SSOT 우선.
 >
 > **함께 보기**: [Phase_2_Learned.md](Phase_2_Learned.md) — 본 Phase에서 등장한 개념 정리. [Phase_2_AssetQueue.md](Phase_2_AssetQueue.md) — Phase 2 코드 작업과 병렬로 진행할 에셋 큐.
+>
+> **v0.4.2 스코프 컷**: SSOT가 자원 4종 → 2종으로 줄었다. **기세(momentum)** 는 Phase 3 SkillData 도입과 동반으로 이동(스킬 쌓기·소비 메커닉과 짝이 있어야 의미 있음). **오성(wisdom)** 은 메타 패시브 슬롯(Phase 11+ PlayerData)으로 이관 — per-battle 자원으로 두면 키우기 결에서 곧 max라 의미 잃음.
 >
 
 ---
@@ -28,11 +30,11 @@
 
 ## 1. Domain 확장
 
-### 1.1 `PlayerActor` — 자원 4종 필드 추가
+### 1.1 `PlayerActor` — 내공 필드 추가
 
 **역할**: Player 전용 자원 컨테이너. Enemy에는 추가하지 않는다 (자원은 Player 한정 개념).
 
-- HP는 이미 base `Actor`에 있음 — 본 Phase에선 그대로 둔다. 자원 4종 중 HP는 Phase 1부터 들어와 있고, Phase 2는 **내공·기세·오성** 세 종을 새로 더한다.
+- HP는 이미 base `Actor`에 있음 — 본 Phase에선 그대로 둔다. Phase 2는 **내공** 한 종만 새로 더한다.
 - 모든 필드 `int` — 부동소수점 누적 오차 회피. SSOT [BATTLE_DESIGN §3 Phase 2](../BATTLE_DESIGN.md) 표 따름.
 
 ### `Scripts/Battle/Domain/PlayerActor.cs` — 확장
@@ -40,17 +42,14 @@
 ```csharp
 namespace MurimRunaway.Battle.Domain
 {
-    /// <summary>플레이어 액터. 이동 + 자원 4종(HP는 base Actor) 보유.</summary>
+    /// <summary>플레이어 액터. 이동 + 자원 (HP는 base Actor) 보유.</summary>
     public sealed class PlayerActor : Actor
     {
         public float MoveSpeed;
 
-        // 자원 — Phase 2 추가. 변경은 IResourceMutator만 통과 ([§2.1](#21-iresourcemutator)).
+        // 내공 — Phase 2 추가. 변경은 IResourceMutator만 통과 ([§2.1](#21-iresourcemutator)).
         public int Inwoo;
         public int MaxInwoo;
-        public int Momentum;
-        public int MaxMomentum;
-        public int Wisdom;
     }
 }
 ```
@@ -71,23 +70,20 @@ namespace MurimRunaway.Battle.Domain
         public float MoveSpeed = 5f;
         public float AttackRange = 20f;
 
-        // 자원 시작값 — SSOT 표의 디폴트 따름
+        // 내공 시작값 — SSOT 표의 디폴트 따름
         public int MaxInwoo = 100;
         public int StartingInwoo = 50;
-        public int MaxMomentum = 10;
-        public int StartingMomentum = 0;
-        public int Wisdom = 5;
     }
 }
 ```
 
 > SSOT는 `inwoo` 디폴트=50, `maxInwoo`=100. 시작값과 최댓값을 같은 자료에 두지 않으면 Phase 11+에서 메타 강화(maxInwoo +10)와 현재값을 별개 축으로 조작하기 어려워진다.
 
-### 1.3 `ActorView` — Player 한정 자원 필드 추가
+### 1.3 `ActorView` — Player 한정 내공 필드 추가
 
-**역할**: View가 자원 게이지를 그릴 수 있도록 스냅샷에 자원 현재/최대값을 노출.
+**역할**: View가 내공 게이지를 그릴 수 있도록 스냅샷에 현재/최대값을 노출.
 
-- Enemy ActorView에는 자원 필드가 없다 — SSOT가 Player 한정으로 명시. struct 한 종류에 다 담되, Enemy의 경우 자원 필드는 0으로 떨어진다 (`IsPlayer` 게이팅으로 View가 판별).
+- Enemy ActorView에는 내공 필드가 없다 — SSOT가 Player 한정으로 명시. struct 한 종류에 다 담되, Enemy의 경우 내공 필드는 0으로 떨어진다 (`IsPlayer` 게이팅으로 View가 판별).
 
 ```csharp
 namespace MurimRunaway.Battle.Domain
@@ -105,9 +101,6 @@ namespace MurimRunaway.Battle.Domain
         // Player 한정 — Enemy는 0 (View가 IsPlayer로 게이팅).
         public readonly int Inwoo;
         public readonly int MaxInwoo;
-        public readonly int Momentum;
-        public readonly int MaxMomentum;
-        public readonly int Wisdom;
 
         public ActorView(Actor actor)
         {
@@ -122,24 +115,18 @@ namespace MurimRunaway.Battle.Domain
             {
                 Inwoo = player.Inwoo;
                 MaxInwoo = player.MaxInwoo;
-                Momentum = player.Momentum;
-                MaxMomentum = player.MaxMomentum;
-                Wisdom = player.Wisdom;
             }
             else
             {
                 Inwoo = 0;
                 MaxInwoo = 0;
-                Momentum = 0;
-                MaxMomentum = 0;
-                Wisdom = 0;
             }
         }
     }
 }
 ```
 
-> Enemy를 위한 별도 struct(`EnemyView`)를 만들 수도 있지만, `ActorView[]` 하나로 매 틱 직렬화하는 게 Phase 11(다수 적)에서 단순하다. 자원 필드 5개의 메모리 낭비는 무시할 수준 — struct 한 인스턴스가 ~40B 늘어날 뿐. Pool이 도입되면(Phase 11+) 재평가.
+> Enemy를 위한 별도 struct(`EnemyView`)를 만들 수도 있지만, `ActorView[]` 하나로 매 틱 직렬화하는 게 Phase 11(다수 적)에서 단순하다. 자원 필드 2개의 메모리 낭비는 무시할 수준. Phase 3에서 기세 필드가 추가되면 다시 ~16B 늘어나는데, Pool이 도입되면(Phase 11+) 재평가.
 
 ---
 
@@ -165,26 +152,19 @@ namespace MurimRunaway.Battle.Engine
 
         /// <summary>maxInwoo로 클램프. silent.</summary>
         void GainInwoo(int amount);
-
-        /// <summary>maxMomentum로 클램프. silent.</summary>
-        void GainMomentum(int amount);
-
-        /// <summary>amount > 현재 momentum이면 false 반환, 값 불변(atomic).</summary>
-        bool SpendMomentum(int amount);
-
-        /// <summary>[1, 10] 클램프.</summary>
-        void SetWisdom(int value);
     }
 }
 ```
+
+> Phase 3에서 `SpendMomentum`/`GainMomentum`이 같은 인터페이스에 추가됨. Phase 2엔 내공 두 개만 노출.
 
 ### 2.2 `BattleEngine` — `IResourceMutator` 구현 + Setup 자원 초기화
 
 **핵심 변경**:
 1. `BattleEngine : IResourceMutator` 구현.
-2. `Setup` 시 `PlayerStartData`의 자원 시작값을 `PlayerActor`에 복사.
-3. `SpendInwoo` 등은 atomic — 부족 시 값 불변 + false 반환.
-4. `GainInwoo`/`GainMomentum`은 max 클램프.
+2. `Setup` 시 `PlayerStartData`의 내공 시작값을 `PlayerActor`에 복사.
+3. `SpendInwoo`는 atomic — 부족 시 값 불변 + false 반환.
+4. `GainInwoo`는 maxInwoo로 클램프.
 
 ### `Scripts/Battle/Engine/BattleEngine.cs` — 추가분만
 
@@ -214,9 +194,6 @@ public sealed class BattleEngine : IResourceMutator
             // Phase 2 추가
             Inwoo = data.Player.StartingInwoo,
             MaxInwoo = data.Player.MaxInwoo,
-            Momentum = data.Player.StartingMomentum,
-            MaxMomentum = data.Player.MaxMomentum,
-            Wisdom = data.Player.Wisdom,
         };
 
         _enemies = data.Enemies
@@ -247,29 +224,6 @@ public sealed class BattleEngine : IResourceMutator
         var next = _player.Inwoo + amount;
         _player.Inwoo = next > _player.MaxInwoo ? _player.MaxInwoo : next;
     }
-
-    public bool SpendMomentum(int amount)
-    {
-        if (amount > _player.Momentum)
-            return false;
-        _player.Momentum -= amount;
-        return true;
-    }
-
-    public void GainMomentum(int amount)
-    {
-        var next = _player.Momentum + amount;
-        _player.Momentum = next > _player.MaxMomentum ? _player.MaxMomentum : next;
-    }
-
-    public void SetWisdom(int value)
-    {
-        if (value < 1)
-            value = 1;
-        else if (value > 10)
-            value = 10;
-        _player.Wisdom = value;
-    }
 }
 ```
 
@@ -277,7 +231,7 @@ public sealed class BattleEngine : IResourceMutator
 
 ---
 
-## 3. View — 자원 4 표시
+## 3. View — 자원 2 표시
 
 진행 순서: **Unity UI 추가 → 코드 수정 → Inspector 연결 → Play 확인**.
 
@@ -287,11 +241,9 @@ public sealed class BattleEngine : IResourceMutator
 
 - 빈 UI 오브젝트 `ResourcePanel`
   - 세로 배치 (Vertical Layout Group 권장. 없으면 손수 정렬)
-  - 자식 4개:
+  - 자식 2개:
     - `HpBar` (TMP_Text + Image 게이지 — 빨강)
     - `InwooBar` (파랑)
-    - `MomentumBar` (노랑)
-    - `WisdomText` (TMP_Text만 — 게이지 아닌 정수 표시)
 
 각 Bar는 다음 구조:
 ```
@@ -302,7 +254,7 @@ HpBar (RectTransform)
  └ ValueText (TMP_Text)    "50 / 50"
 ```
 
-> 게이지 4종을 일일이 만들기 귀찮으면 **HpBar를 Prefab으로 만들고 3번 복제**해 라벨/색만 바꾼다. Phase 2 placeholder 수준이라 정교한 UI는 Phase 14에서 다시 함.
+> **HpBar를 Prefab으로 만들고 1번 복제**해 라벨/색만 바꿔 InwooBar로 쓴다. Phase 2 placeholder 수준이라 정교한 UI는 Phase 14에서 다시 함. Phase 3에 기세 게이지가 추가되면 같은 Prefab을 한 번 더 복제.
 
 ### 3.2 `ResourceBar` MonoBehaviour (작은 헬퍼)
 
@@ -349,8 +301,6 @@ public sealed class BattleSceneController : MonoBehaviour
 
     [SerializeField] private ResourceBar _hpBar;
     [SerializeField] private ResourceBar _inwooBar;
-    [SerializeField] private ResourceBar _momentumBar;
-    [SerializeField] private TMP_Text _wisdomText;
 
     // ... 기존 BattleEngine·_enemyMarkers·_worldMax 유지 ...
 
@@ -368,8 +318,6 @@ public sealed class BattleSceneController : MonoBehaviour
             {
                 _hpBar.SetValue(actor.Hp, actor.MaxHp);
                 _inwooBar.SetValue(actor.Inwoo, actor.MaxInwoo);
-                _momentumBar.SetValue(actor.Momentum, actor.MaxMomentum);
-                _wisdomText.text = $"오성 {actor.Wisdom}";
             }
         }
     }
@@ -382,18 +330,14 @@ public sealed class BattleSceneController : MonoBehaviour
 |------|------------|
 | `_hpBar` | `ResourcePanel/HpBar`에 붙은 `ResourceBar` |
 | `_inwooBar` | `ResourcePanel/InwooBar` |
-| `_momentumBar` | `ResourcePanel/MomentumBar` |
-| `_wisdomText` | `ResourcePanel/WisdomText`의 TMP_Text |
 
-`PlayerStartData` 시작값은 일단 디폴트(`Inwoo=50/100`, `Momentum=0/10`, `Wisdom=5`) 그대로. SerializeField로 노출할지는 Phase 3에서 Skill 비용 튜닝 시작할 때 결정.
+`PlayerStartData` 시작값은 일단 디폴트(`Inwoo=50/100`) 그대로. SerializeField로 노출할지는 Phase 3에서 Skill 비용 튜닝 시작할 때 결정.
 
 ### 3.5 Play 확인
 
 Play 누르면:
 - HP 막대가 50/50으로 가득 차 보임.
 - 내공 막대가 50/100으로 절반.
-- 기세 막대가 0/10으로 비어 있음.
-- 오성 텍스트에 "오성 5".
 - Phase 1 흐름(진군→Resolve)은 그대로 작동.
 
 자원이 변하지 않는 게 정상 — Phase 2엔 mutator를 부르는 코드가 없음.
@@ -527,7 +471,6 @@ public sealed class BattleSceneController : MonoBehaviour
 **검증**:
 - SpendInwoo 부족 시 false + 값 불변 (I-2.2).
 - GainInwoo가 maxInwoo로 클램프 (Edge).
-- SpendMomentum 부족 시 false + 값 불변 (I-2.3).
 
 ```csharp
 using NUnit.Framework;
@@ -548,8 +491,6 @@ namespace MurimRunaway.Battle.Tests
                 {
                     MaxHp = 50, MoveSpeed = 5f, AttackRange = 20f,
                     MaxInwoo = 100, StartingInwoo = 50,
-                    MaxMomentum = 10, StartingMomentum = 0,
-                    Wisdom = 5,
                 },
                 Enemies = new EnemyData[0],
             });
@@ -568,7 +509,6 @@ namespace MurimRunaway.Battle.Tests
             ((BattleEngine)mutator).Start();
             BattleSnapshot snapshot = default;
             ((BattleEngine)mutator).SnapshotPublished += s => snapshot = s;
-            // Start에서 이미 발행됨 — 아래 호출은 필요없을 수도 있으나 안전하게 한 틱 더
             Assert.AreEqual(50, snapshot.Actors[0].Inwoo);
         }
 
@@ -586,21 +526,6 @@ namespace MurimRunaway.Battle.Tests
 
             Assert.AreEqual(100, snapshot.Actors[0].Inwoo);
         }
-
-        [Test]
-        public void 기세가_부족하면_SpendMomentum은_false를_반환하고_값은_그대로다()
-        {
-            var engine = CreateEngine();
-            IResourceMutator mutator = engine;
-
-            var ok = mutator.SpendMomentum(1); // 시작 0
-
-            Assert.IsFalse(ok);
-            BattleSnapshot snapshot = default;
-            engine.SnapshotPublished += s => snapshot = s;
-            engine.Start();
-            Assert.AreEqual(0, snapshot.Actors[0].Momentum);
-        }
     }
 }
 ```
@@ -614,17 +539,17 @@ namespace MurimRunaway.Battle.Tests
 [BATTLE_DESIGN §3 Phase 2 Acceptance](../BATTLE_DESIGN.md) + M2 추가:
 
 - [ ] EditMode: SpendInwoo로 0 미만이 되는 시도가 false 반환 + 값 불변. (§5.1)
-- [ ] EditMode: 시드 동일 시 자원 시뮬 결과 결정적. → 본 Phase엔 mutator 호출처가 없어 자원이 안 변함. SSOT 표현 그대로지만 사실상 Phase 1 결정성에 흡수됨. **Phase 3 진입 시 Skill 시전이 들어오면 그때 결정성 테스트 추가** ([§4.2 RngServiceTests](../../Assets/_Project/Tests/Battle/RngServiceTests.cs)가 이미 RNG 결정성을 검증하고 있음).
-- [ ] PlayMode: 화면에 4개 자원 게이지/숫자 표시 (HP·내공·기세 게이지 + 오성 텍스트).
+- [ ] EditMode: GainInwoo가 maxInwoo 초과 시 maxInwoo로 클램프. (§5.1)
+- [ ] PlayMode: 화면에 HP·내공 게이지 표시.
 - [ ] PlayMode: VContainer LifetimeScope에서 의존성 주입 동작 확인 — Play 시 NullReferenceException 없이 Phase 1 흐름 그대로 재현.
 
 ---
 
 ## 7. 흔한 함정
 
-- **PlayerActor 자원 필드 직접 쓰기** — `engine._player.Inwoo -= 5` 같은 직접 쓰기는 mutator를 우회. 코드 리뷰 시 grep으로 검출 (`\.Inwoo\s*[-+*/]?=` 패턴이 BattleEngine.cs의 mutator 메서드 외에 나타나면 위반).
+- **PlayerActor.Inwoo 직접 쓰기** — `engine._player.Inwoo -= 5` 같은 직접 쓰기는 mutator를 우회. 코드 리뷰 시 grep으로 검출 (`\.Inwoo\s*[-+*/]?=` 패턴이 BattleEngine.cs의 mutator 메서드 외에 나타나면 위반).
 - **GainInwoo의 음수 인자** — `GainInwoo(-5)`는 silent로 inwoo를 5 깎는다. 의도된 동작이 아니라면 호출처 버그. SpendInwoo로 명시할 것. 본 Phase에선 가드 안 추가(Phase 4 데미지 계산이 들어올 때 통합 검토).
-- **Enemy ActorView의 자원 필드를 게이지에 묶기** — Enemy는 자원 0. `IsPlayer` 게이팅 누락하면 Enemy 마커 옆에 빈 게이지가 그려짐.
+- **Enemy ActorView의 Inwoo 필드를 게이지에 묶기** — Enemy는 Inwoo 0. `IsPlayer` 게이팅 누락하면 Enemy 마커 옆에 빈 게이지가 그려짐.
 - **LifetimeScope에 Engine을 트랜션트로 등록** — Singleton이어야 매 틱 같은 인스턴스. `Lifetime.Transient`로 두면 `Construct`가 받는 Engine과 `Setup`/`Start`를 호출한 Engine이 달라질 수 있음.
 - **`[Inject]` 메서드를 `private`으로** — VContainer는 public/private 모두 reflect하지만 IL2CPP 빌드(모바일)에서 stripping될 위험. `public void Construct(...)`로 두면 안전.
 
@@ -632,4 +557,4 @@ namespace MurimRunaway.Battle.Tests
 
 ## 8. Phase 2 → Phase 3 진입 조건
 
-§6 체크리스트 4개 + 커밋 완료. Phase 3는 [BATTLE_DESIGN §3 Phase 3](../BATTLE_DESIGN.md) — `SkillData` SO + 자동 시전 결정 트리. **첫 작업으로 `IBattleSystem` 패턴 도입**(SSOT 리팩토링 트리거)이 들어와 `BattleEngine.HandleTick`이 dispatcher로 줄어든다. 본 Phase의 `IResourceMutator`는 그 때 Skill 효과의 호출처가 된다.
+§6 체크리스트 4개 + 커밋 완료. Phase 3는 [BATTLE_DESIGN §3 Phase 3](../BATTLE_DESIGN.md) — `SkillData` SO + 자동 시전 결정 트리 + **기세(momentum) 자원 컨테이너 도입**(v0.4.2 스코프 컷으로 P2에서 옮겨옴). **첫 작업으로 `IBattleSystem` 패턴 도입**(SSOT 리팩토링 트리거)이 들어와 `BattleEngine.HandleTick`이 dispatcher로 줄어든다. 본 Phase의 `IResourceMutator`는 그 때 `GainMomentum`/`SpendMomentum`이 추가되며 Skill 효과의 호출처가 된다.

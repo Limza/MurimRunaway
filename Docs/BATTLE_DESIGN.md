@@ -316,11 +316,15 @@ public readonly struct ActorView
 
 ---
 
-### Phase 2. 자원 (HP / 내공 / 기세 / 오성)
+### Phase 2. 자원 (HP / 내공)
 
-**Goal**: Player 자원 4종 모델 + 변경 룰 + 자원 변경 이벤트. 자원이 변경되면 Snapshot에 반영.
+**Goal**: Player 자원 2종(HP·내공) 모델 + 변경 룰 + Snapshot 반영. 자원 변경 단일 진입점(`IResourceMutator`) 노출.
 
 **Non-goals**: 자원을 소비/회복하는 스킬·룰은 Phase 3 이후. 본 Phase는 자원 컨테이너만.
+
+> **스코프 결정 (2026-05-14, v0.4.2)**: 본 Phase에서 **기세(momentum)/오성(wisdom)을 제외**.
+> - **기세**: 단독 자원으로는 의미 없음 — 스킬의 "쌓기/소비" 메커닉과 짝일 때만 자원으로 성립. Phase 3 SkillData 도입과 동반으로 이동 (Phase 3 Data에 포함).
+> - **오성**: per-battle 자원으로 두면 키우기 게임 결에서 의미 잃음(곧 max). **메타 패시브 슬롯(PlayerData, Phase 11+)** 으로 이동 — Phase 7 hint 정확도는 메타 슬롯 값을 읽는 형태로 명세. Phase 11+ 도입 전엔 placeholder fixed 값으로 우회.
 
 **Data (추가)**:
 
@@ -329,39 +333,35 @@ public readonly struct ActorView
 |------|------|------|------|--------|------|
 | inwoo | int | 내공 | [0, maxInwoo] | 50 | 시전 비용 자원 |
 | maxInwoo | int | 내공 | [1, ∞) | 100 | 최대 내공 |
-| momentum | int | 기세 | [0, maxMomentum] | 0 | 오의 자원 (스택) |
-| maxMomentum | int | 기세 | [1, ∞) | 10 | 최대 기세 스택 |
-| wisdom | int | 오성 | [1, 10] | 5 | hint 정확도·선택지 풀 등급 |
 
 ActorView 확장 (Player 한정):
 | 필드 추가 | |
 |----------|--|
-| Inwoo, MaxInwoo, Momentum, MaxMomentum, Wisdom | (Enemy ActorView에는 없음) |
+| Inwoo, MaxInwoo | (Enemy ActorView에는 없음) |
 
 **State machine**: 변경 없음.
 
 **Behaviors**:
 1. `IResourceMutator` Engine 내부 인터페이스 — 자원 변경의 단일 진입점.
-   - `SpendInwoo(int amount)` — `amount > inwoo` 시 `false` 반환, 변경 없음.
-   - `GainInwoo(int amount)`, `GainMomentum(int amount)`, `SpendMomentum(int amount)`, `SetWisdom(int)`.
+   - `SpendInwoo(int amount)` — `amount > inwoo` 시 `false` 반환, 변경 없음 (atomic).
+   - `GainInwoo(int amount)` — `min(inwoo + amount, maxInwoo)` 로 클램프 (silent).
 2. 모든 자원 변경은 `IResourceMutator`만 통과 — 다른 코드에서 직접 필드 쓰기 금지 (코드 리뷰 시 검증).
 3. 자원이 변경되면 Snapshot의 다음 발행에 반영 (즉시 이벤트 X — Snapshot 일관성 우선).
 
 **Formulas**: 없음 (변경 룰만).
 
 **Invariants**:
-- I-2.1: `0 ≤ inwoo ≤ maxInwoo`, `0 ≤ momentum ≤ maxMomentum`, `1 ≤ wisdom ≤ 10`.
+- I-2.1: `0 ≤ inwoo ≤ maxInwoo`.
 - I-2.2: SpendInwoo가 `false` 반환했을 때 inwoo는 변경되지 않음 (atomic).
-- I-2.3: SpendMomentum도 마찬가지.
 
 **Edge**:
 - GainInwoo가 maxInwoo를 초과하려 할 때 → `min(inwoo + amount, maxInwoo)` 로 클램프 (silent).
-- Wisdom은 변동 가능하나 본 Phase에선 Setup 시 1회만 설정.
 
 **Acceptance**:
 - [ ] EditMode: SpendInwoo로 0 미만이 되는 시도가 false 반환 + 값 불변.
-- [ ] EditMode: 시드 동일 시 자원 시뮬 결과 결정적.
-- [ ] PlayMode: 화면에 4개 자원 게이지/숫자 표시.
+- [ ] EditMode: GainInwoo가 maxInwoo 초과 시 maxInwoo로 클램프.
+- [ ] PlayMode: 화면에 HP·내공 게이지 표시.
+- [ ] PlayMode: VContainer LifetimeScope에서 의존성 주입 동작 (Phase 1 흐름 회귀 없음).
 
 ---
 
@@ -406,6 +406,10 @@ ActorView 확장 (Player 한정):
 |----------|------|------|
 | skillSlots | SkillData[] | 학습한 무공 (시작 3, 최대 6) |
 | skillCooldowns | float[] | 슬롯별 남은 쿨 (초) |
+| momentum | int | 기세 (오의 자원 스택). 범위 `[0, maxMomentum]`, 디폴트 0 |
+| maxMomentum | int | 최대 기세 스택. 디폴트 10 |
+
+> **기세 자원은 Phase 2가 아닌 본 Phase에서 도입** (v0.4.2 스코프 컷). `IResourceMutator`에 `GainMomentum(int)`/`SpendMomentum(int)` 메서드 추가. Invariant: `0 ≤ momentum ≤ maxMomentum`, SpendMomentum atomic(부족 시 false + 값 불변). ActorView에 `Momentum`/`MaxMomentum` Player 한정 필드 추가.
 
 **State machine (Actor FSM, 활성화)**:
 - Player: Idle ↔ Casting (시전 직후 즉시 Idle 복귀, 본 Phase에선 시전 시간 = 0)
@@ -807,6 +811,8 @@ event Action<OuuiPattern chosen, OffenseMatchup result, int damageDealt, int cou
 
 **Non-goals**: 재능별 시작 오성값(Phase 8).
 
+> **Wisdom 값 출처 (v0.4.2)**: 오성은 per-battle 자원이 아니라 **메타 패시브 슬롯**(PlayerData, Phase 11+)에서 읽는 영구 stat. Phase 7 진입 시점에 Phase 11+가 미도입이면 placeholder fixed 값(예: 5) 사용. Phase 11+ 도입 후 `PlayerData.metaPassives` 조회로 교체. `PlayerActor`에 wisdom 필드를 두지 않는다.
+
 **Data (추가)**:
 
 `WisdomTier` enum:
@@ -884,18 +890,19 @@ public interface IChoicePoolProvider
 | startingMaxHp | int | 100 | 시작 최대 HP |
 | startingMaxInwoo | int | 100 | 시작 최대 내공 |
 | startingMomentum | int | 0 | 매 전투 시작 시 기세 |
-| startingWisdom | int | 5 | 시작 오성 |
 | startingSkills | SkillData[] | — | 시작 무공 슬롯 |
 | specialBehaviorId | string | "" | 재능 특수 능력 식별자 (Phase 8.1+) |
 
-**3재능 시작값** (SSOT):
-| 재능 | maxHp | maxInwoo | startingMomentum | startingWisdom | 시작 무공 풀 (요지) |
-|------|-------|----------|------------------|----------------|---------------------|
-| 천무지체 (tianmu) | 100 | 100 | 0 | 8 | 균형 (초식 1 + 심법 1 + 오의 1) |
-| 카피 (copy)       | 100 | 100 | 0 | 3 | 빈 슬롯 많음 (시작 무공 1) |
-| 대종사 (daejongsa)| 100 | 100 | 5 | 6 | 강한 오의 1 + 초식 1 |
+> **`startingWisdom` 제거 (v0.4.2)**: 오성은 메타 패시브 슬롯(Phase 11+)으로 이관. 재능별 wisdom 차별화는 "재능이 메타 패시브 풀에 가하는 가중치"로 표현 (Phase 8/Phase 12 연계, Open Q-18). 본 Phase에선 wisdom 시작값을 다루지 않음.
 
-> 카피 wisdom=3은 Low tier로, hint 부정확 + 선택지 풀 약함을 의도. "잘못된 수싸움을 무효화하는" 카피 능력의 카운터로 정보 핸디캡 부여.
+**3재능 시작값** (SSOT):
+| 재능 | maxHp | maxInwoo | startingMomentum | 시작 무공 풀 (요지) |
+|------|-------|----------|------------------|---------------------|
+| 천무지체 (tianmu) | 100 | 100 | 0 | 균형 (초식 1 + 심법 1 + 오의 1) |
+| 카피 (copy)       | 100 | 100 | 0 | 빈 슬롯 많음 (시작 무공 1) |
+| 대종사 (daejongsa)| 100 | 100 | 5 | 강한 오의 1 + 초식 1 |
+
+> 카피의 "정보 핸디캡" 의도(기존 wisdom=3)는 메타 패시브 풀 가중치로 재현. 카피 재능 보유 시 오성 패시브 슬롯의 강화 확률이 낮아지는 식 — 정확한 수치는 Phase 8/12 연계로 결정 (Open Q-18).
 
 **Behaviors**:
 1. Setup 시 PlayerActor 초기화에 TalentData 적용.
@@ -921,8 +928,7 @@ public interface ITalentSpecialBehavior
 - 시작 무공이 maxSlot(6)을 초과하면 컨텐츠 검증 단계에서 거부.
 
 **Acceptance**:
-- [ ] EditMode: 3재능 각각 Setup 후 startingMomentum/Wisdom 일치.
-- [ ] EditMode: 카피 재능 Setup 시 hint 정확도 Low tier 동작.
+- [ ] EditMode: 3재능 각각 Setup 후 startingMomentum 일치.
 - [ ] PlayMode: 재능 선택 → 3가지 시작 자원/슬롯 시각 확인.
 
 #### Phase 8.1 카피 재능 — 적 무공 카피 [후속, 본 Phase에선 명세만]
@@ -1078,7 +1084,7 @@ public interface ITelemetrySink
 |---|------|----------|---------------|
 | Q-1 | 능력치 압도 보정 (`statSurpressionMod`) 공식 — 플레이어 평균 stat과 적 stat 비율 기반? | P5/P6 | P5 진입 전 |
 | Q-2 | 플레이어 일반 공격 존재 여부 (없으면 무공 자동 시전만 데미지원) | P3/P4 | P4 진입 전 |
-| Q-3 | 회복원 (HP/내공/기세) — 시간/이벤트/스킬 어디서 회복? | P2/P9 | P2 진입 전 |
+| Q-3 | 회복원 (HP/내공) — 시간/이벤트/스킬 어디서 회복? 기세는 P3 시전 보상으로만 | P2/P3/P9 | P3 진입 전 |
 | Q-4 | 카피 재능의 적 무공 학습 확률·매핑 | P8.1 | P8 완료 전 |
 | Q-5 | 대종사 재능의 강화 추가 효과 수치 | P8.2 | P8 완료 전 |
 | Q-6 | 오성 등급별 4택 풀의 정확한 무공 매핑 | P7 | P7 진입 전 |
@@ -1114,6 +1120,7 @@ public interface ITelemetrySink
 | 2026-05-14 | 0.3.8 | **Phase 1 완료** — 1D 거리축 + 플레이어 진군 + Resolve(victory). Domain 10타입(`Actor`/`PlayerActor`/`EnemyActor`/`EnemyData`/`BattleStartData`/`PlayerStartData`/`BattleSnapshot`/`ActorView`/`ActorState`/`BattlePhase`) + Engine(`BattleEngine` 재작성 — `HandleTick` 오케스트레이션 + `TickMovement`/`TickEngagementCheck` 서브루틴) + View(거리 게이지 + EnemyMarker prefab). EditMode 테스트 2종(`BattleEngineApproachTests`, `BattleEngineNearestEnemyTests`) 통과. Phase 1 Guide/Learned/AssetQueue 산출. 커밋 `afe00ac`. |
 | 2026-05-14 | 0.4 | **v4.1 스코프 컷 + 서사 통일** (피벗 아님). (a) **PvP 컷** — Phase 15 stub 제거, §1.2 Non-goals/§0.5 PvP 표기 재프레이밍, §1.1 Goal 5 "외부 시연 재현"으로 정정, MILESTONES §5로 이동. (b) **재능 매커니즘** — 런 시작 선택 → 런 종료 확률 각성, 캐릭터에 0~3개 누적·동시 작동·가중치 스택. 첫 런 = 재능 0개 = 신참 베이스라인. §1.1 Goal 3 + Phase 8 헤더 노트 갱신. (c) **서사 통일** — 카드=무공 습득/메타=수련 누적/각성=깨달음 (narrative 본문은 TOTAL_DESIGN v4 리프레시 시 적용). (d) §4 Open Q에 v4.1 보류 6건 추가(Q-8~Q-13). |
 | 2026-05-14 | 0.4.1 | **카드 시스템 구조 결정** — 하이브리드 이중 풀(계승+휘발). 계승 풀에 무공 4슬롯(액티브 2 + 패시브 2), 슬롯별 1~6장 모션 진화 + 7~17장 1~12성 위력 누산(12성 특별 연출). 휘발 풀은 슬롯 없이 한 런 내 누적, 무공+패시브 둘 다. 단일 클래스=검사, 평타 세로 베기 자동. Phase 12/13 개요 갱신, Open Q-14~Q-18 추가. |
+| 2026-05-14 | 0.4.2 | **Phase 2 스코프 컷 — 기세/오성 제외**. (a) **기세**: 단독 자원으로 의미 부족(쌓기·소비 메커닉과 짝일 때만 성립) → Phase 3 SkillData 도입과 동반 이동(P3 PlayerActor 확장에 momentum/maxMomentum, IResourceMutator에 GainMomentum/SpendMomentum). (b) **오성**: per-battle 자원으로 두면 키우기 게임 결에서 곧 max → 메타 패시브 슬롯(PlayerData, Phase 11+)으로 이관. P7 Wisdom 출처 = 메타 슬롯(Phase 11+ 미도입 시 placeholder), P8 talent 표에서 startingWisdom 제거(카피 정보 핸디캡 의도는 메타 풀 가중치로 재현). Q-3 회복원에서 기세 제거, Phase 2 Acceptance에 VContainer 항목 추가. Phase_2_Guide.md 동시 갱신. |
 
 ---
 
