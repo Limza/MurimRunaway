@@ -128,29 +128,29 @@ Assets/_Project/
 > 
 > **YAGNI**: "나중에 쓸 것 같아서" 미리 만들지 않는다 ([CLAUDE.md §1](../../CLAUDE.md)).
 > 
-> Phase 0에서 실제로 쓰이는 Domain 타입은 `BattleState` 하나.
-> `BattleData`(Phase 1), `BattleResult`(Phase 4)는 그 Phase에서 만든다.
+> Phase 0에서 실제로 쓰이는 Domain 타입은 `BattleSnapshot` 하나.
+> `BattleStartData`(Phase 1), `BattleResult`(Phase 4)는 그 Phase에서 만든다.
 > 
 
-### 무엇을 만드는가 — `BattleState`
+### 무엇을 만드는가 — `BattleSnapshot`
 
 **역할**: Engine이 매 틱마다 "이 시점의 전투 상태는 이렇다"고 View에 **읽기 전용으로 던져주는 데이터 묶음**.
 
 - Engine 내부 변수(`_tickIndex` 등)를 View가 직접 만지지 못하게 하기 위한 **경계용 타입**.
 - `readonly struct` — 한번 만들면 못 바꿈. View가 받아서 그리는 동안 Engine이 다음 틱을 진행해도 충돌 없음.
 - Phase 0에서는 `TickIndex` 하나뿐이지만, 이후 Phase에서 HP·거리·상태이상 등 필드가 추가될 예정.
-- 흐름: `Engine이 매 틱 BattleState 생성` → `OnSnapshot 이벤트로 통보` → `View가 받아서 UI 갱신`.
+- 흐름: `Engine이 매 틱 BattleSnapshot 생성` → `SnapshotPublished 이벤트로 통보` → `View가 받아서 UI 갱신`.
 
-### `Scripts/Battle/Domain/BattleState.cs`
+### `Scripts/Battle/Domain/BattleSnapshot.cs`
 
 ```csharp
 namespace MurimRunaway.Battle.Domain
 {
     /// <summary>매 틱 Engine이 View에 던지는 읽기 전용 상태 스냅샷.</summary>
-    public readonly struct BattleState
+    public readonly struct BattleSnapshot
     {
         public readonly long TickIndex;
-        public BattleState(long tickIndex) { TickIndex = tickIndex; }
+        public BattleSnapshot(long tickIndex) { TickIndex = tickIndex; }
     }
 }
 ```
@@ -165,9 +165,9 @@ namespace MurimRunaway.Battle.Domain
 
 **역할**: "매 0.05초마다 한 번씩 신호를 쏴주는 시계"의 **추상화**.
 
-- 실제 게임에서는 Unity의 `Update()`가 매 프레임 호출되며 dt를 누적해 0.05초가 차면 `OnTick(0.05f)`을 호출 (§6.1 `UnityTickService`).
+- 실제 게임에서는 Unity의 `Update()`가 매 프레임 호출되며 dt를 누적해 0.05초가 차면 `Ticked(0.05f)`을 호출 (§6.1 `UnityTickService`).
 - 테스트에서는 Unity 없이 동작해야 하므로 수동으로 똑딱이는 가짜 구현 (§7.1 `MockTickService`).
-- 인터페이스로 묶어두면 Engine은 "시간이 어디서 오는지" 모르고 그냥 `OnTick`을 구독만 하면 됨 → **Engine이 Unity에 직접 의존하지 않게 됨**.
+- 인터페이스로 묶어두면 Engine은 "시간이 어디서 오는지" 모르고 그냥 `Ticked`을 구독만 하면 됨 → **Engine이 Unity에 직접 의존하지 않게 됨**.
 
 ### `Scripts/Battle/Engine/ITickService.cs`
 
@@ -179,7 +179,7 @@ namespace MurimRunaway.Battle.Engine
     /// <summary>0.05초 고정 간격 틱 신호의 추상화. Engine을 Unity 시간에서 분리.</summary>
     public interface ITickService
     {
-        event Action<float> OnTick;   // dt = 0.05f 고정
+        event Action<float> Ticked;   // dt = 0.05f 고정
     }
 }
 ```
@@ -238,10 +238,10 @@ namespace MurimRunaway.Battle.Engine
 
 ### 5.2 무엇을 만드는가 — `BattleEngine`
 
-**역할**: 전투 시뮬레이션의 **심장**. Phase 0 시점에서는 단순히 "틱이 올 때마다 카운터를 +1 하고 `BattleState`를 발행"하는 정도.
+**역할**: 전투 시뮬레이션의 **심장**. Phase 0 시점에서는 단순히 "틱이 올 때마다 카운터를 +1 하고 `BattleSnapshot`를 발행"하는 정도.
 
-- 생성자에서 `ITickService.OnTick`을 구독 → 시간 진행은 외부에서 주입.
-- 매 틱 `_tickIndex++` → `OnSnapshot` 이벤트로 View에 통보.
+- 생성자에서 `ITickService.Ticked`을 구독 → 시간 진행은 외부에서 주입.
+- 매 틱 `_tickIndex++` → `SnapshotPublished` 이벤트로 View에 통보.
 - `using UnityEngine` 없음에 주의 — Engine은 순수 C#만 사용 ([CLAUDE.md §2](../../CLAUDE.md)).
 - 이후 Phase에서 Actor·HP·거리축·기술 시스템이 여기로 들어옴.
 
@@ -253,18 +253,18 @@ using MurimRunaway.Battle.Domain;
 
 namespace MurimRunaway.Battle.Engine
 {
-    /// <summary>전투 시뮬레이션 본체. 틱마다 상태를 진행시키고 OnSnapshot으로 통보.</summary>
+    /// <summary>전투 시뮬레이션 본체. 틱마다 상태를 진행시키고 SnapshotPublished으로 통보.</summary>
     public sealed class BattleEngine
     {
         private readonly ITickService _tick;
         private long _tickIndex;
 
-        public event Action<BattleState> OnSnapshot;
+        public event Action<BattleSnapshot> SnapshotPublished;
 
         public BattleEngine(ITickService tick)
         {
             _tick = tick;
-            _tick.OnTick += HandleTick;
+            _tick.Ticked += HandleTick;
         }
 
         public void Start() { _tickIndex = 0; }
@@ -272,14 +272,14 @@ namespace MurimRunaway.Battle.Engine
         private void HandleTick(float dt)
         {
             _tickIndex++;
-            OnSnapshot?.Invoke(new BattleState(_tickIndex));
+            SnapshotPublished?.Invoke(new BattleSnapshot(_tickIndex));
         }
     }
 }
 ```
 
 >
-> `IBattleEngine` 인터페이스·`Setup(BattleData)`·`OnResult`는 Phase 1 이후 필요해지면 추출한다.
+> `IBattleEngine` 인터페이스·`Setup(BattleStartData)`·`OnResult`는 Phase 1 이후 필요해지면 추출한다.
 >
 
 ---
@@ -290,7 +290,7 @@ namespace MurimRunaway.Battle.Engine
 
 **역할**: `ITickService`의 Unity 실구현. `MonoBehaviour`라서 씬 GameObject에 붙여 사용.
 
-- `Update()`에서 `Time.deltaTime`을 누적하다 0.05초가 차면 `OnTick(0.05f)` 호출.
+- `Update()`에서 `Time.deltaTime`을 누적하다 0.05초가 차면 `Ticked(0.05f)` 호출.
 - 프레임 레이트가 들쑥날쑥해도 **틱은 항상 0.05초 간격**으로 일정 → 결정적 시뮬레이션 보장.
 - `while` 루프인 이유: 한 프레임에 0.1초가 흘렀다면 틱을 두 번 호출해야 함 (스파이크 보정).
 
@@ -309,7 +309,7 @@ namespace MurimRunaway.Battle.View
         private const float TickIntervalSeconds = 0.05f;
         private float _elapsedSinceLastTick;
 
-        public event Action<float> OnTick;
+        public event Action<float> Ticked;
 
         private void Update()
         {
@@ -318,7 +318,7 @@ namespace MurimRunaway.Battle.View
             while (_elapsedSinceLastTick >= TickIntervalSeconds)
             {
                 _elapsedSinceLastTick -= TickIntervalSeconds;
-                OnTick?.Invoke(TickIntervalSeconds);
+                Ticked?.Invoke(TickIntervalSeconds);
             }
         }
     }
@@ -331,7 +331,7 @@ namespace MurimRunaway.Battle.View
 
 - Inspector에서 `UnityTickService`와 `TMP_Text`를 슬롯에 꽂아둠.
 - `Start()`에서 `BattleEngine`을 생성하며 TickService를 주입 (의존성 주입).
-- `OnSnapshot` 이벤트를 구독해 매 틱 카운터 텍스트 갱신.
+- `SnapshotPublished` 이벤트를 구독해 매 틱 카운터 텍스트 갱신.
 - Engine은 Unity를 모르고, View는 Engine 내부를 모름 → 둘을 잇는 책임만 이 클래스가 짐.
 
 ### `Scripts/Battle/View/BattleSceneController.cs` — 카운터 표시
@@ -355,11 +355,11 @@ namespace MurimRunaway.Battle.View
         private void Start()
         {
             _engine = new BattleEngine(_tickService);
-            _engine.OnSnapshot += HandleSnapshot;
+            _engine.SnapshotPublished += HandleSnapshot;
             _engine.Start();
         }
 
-        private void HandleSnapshot(BattleState state)
+        private void HandleSnapshot(BattleSnapshot state)
         {
             if (_counterText != null)
                 _counterText.text = $"Tick: {state.TickIndex}";
@@ -374,9 +374,9 @@ namespace MurimRunaway.Battle.View
 
 ### 7.1 무엇을 만드는가 — `MockTickService`
 
-**역할**: 테스트에서 Unity 없이 `OnTick`을 수동으로 호출하는 가짜 TickService.
+**역할**: 테스트에서 Unity 없이 `Ticked`을 수동으로 호출하는 가짜 TickService.
 
-- `PumpTicks(100)` 호출 시 `OnTick(0.05f)`을 100번 즉시 호출 → 테스트가 1초를 기다리지 않음.
+- `PumpTicks(100)` 호출 시 `Ticked(0.05f)`을 100번 즉시 호출 → 테스트가 1초를 기다리지 않음.
 - `ITickService`를 구현하므로 `BattleEngine`은 진짜와 가짜를 구분하지 못함 (인터페이스의 힘).
 
 ### `Tests/Battle/MockTickService.cs` — 테스트용 수동 펌프
@@ -387,17 +387,17 @@ using MurimRunaway.Battle.Engine;
 
 namespace MurimRunaway.Battle.Tests
 {
-    /// <summary>테스트용 수동 펌프. PumpTicks(n)로 OnTick을 즉시 n번 호출.</summary>
+    /// <summary>테스트용 수동 펌프. PumpTicks(n)로 Ticked을 즉시 n번 호출.</summary>
     public sealed class MockTickService : ITickService
     {
         private const float TickIntervalSeconds = 0.05f;
 
-        public event Action<float> OnTick;
+        public event Action<float> Ticked;
 
         public void PumpTicks(int count)
         {
             for (int i = 0; i < count; i++)
-                OnTick?.Invoke(TickIntervalSeconds);
+                Ticked?.Invoke(TickIntervalSeconds);
         }
     }
 }
@@ -417,7 +417,7 @@ namespace MurimRunaway.Battle.Tests
         {
             var tick = new MockTickService();
             float total = 0f;
-            tick.OnTick += dt => total += dt;
+            tick.Ticked += dt => total += dt;
 
             tick.PumpTicks(100);
 

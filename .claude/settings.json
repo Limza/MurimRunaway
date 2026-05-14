@@ -19,7 +19,8 @@
       "WebFetch(domain:namu.wiki)",
       "WebFetch(domain:www.reddit.com)",
       "WebFetch(domain:oldcynic.com)",
-      "WebFetch(domain:actfirstgames.com)"
+      "WebFetch(domain:actfirstgames.com)",
+      "Bash(git rm *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\rkddl\\Desktop\\MyWork\\MurimRunaway\\Docs"

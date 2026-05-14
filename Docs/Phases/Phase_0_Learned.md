@@ -12,11 +12,15 @@
 
 기본적으로 Unity는 `Assets/` 아래 모든 스크립트를 `Assembly-CSharp.dll` 한 덩어리로 컴파일한다. 이게 다음 문제를 만든다:
 1. 한 줄만 고쳐도 전체 재컴파일 → 큰 프로젝트일수록 느려진다.
-2. 모든 스크립트가 서로를 자유롭게 참조 가능 → 아키텍처 위반(예: View가 Domain의 private 필드 직접 변경)을 컴파일러가 막을 수 없다.
+2. 모든 스크립트가 서로를 자유롭게 참조 가능 → 아키텍처 위반(예: Engine이 View를 참조하거나, 의도하지 않은 계층의 타입을 직접 호출)을 컴파일러가 막을 수 없다.
 
 asmdef로 코드를 작은 어셈블리로 나누면:
 - 그 어셈블리만 다시 컴파일 → 빨라진다.
 - `references` 필드에 의존 가능한 어셈블리를 명시 → **참조하지 않은 어셈블리의 타입은 사용 자체가 컴파일 에러**.
+
+중요: asmdef가 강제하는 것은 **"누가 누구를 참조할 수 있는가"** 까지다.  
+즉 `View`가 `Domain` asmdef를 참조하고 있다면 `Domain`의 `public` 타입을 사용하는 것은 가능하다.  
+반대로 **"참조한 뒤 그 값을 수정할 수 있는가"** 는 asmdef가 아니라 `public/private`, `readonly`, immutable snapshot 같은 **타입 설계**가 결정한다.
 
 **이 프로젝트의 설계**
 
@@ -27,10 +31,10 @@ Domain  ←  Engine  ←  View
 ```
 - Domain은 아무것도 참조 안 함 → 순수 데이터/룰.
 - Engine은 Domain만 참조 → 룰을 적용하지만 화면을 모름.
-- View는 둘 다 참조 → 화면에 그리고 입력을 받지만, 룰을 결정하지 않음.
+- View는 둘 다 참조 → 화면에 그리고 입력을 받지만, 룰을 결정하지 않음. 단, 이 말이 "Domain을 아예 못 건드린다"는 뜻은 아니다. View가 받는 값은 `BattleSnapshot`, `ActorView` 같은 읽기 전용 스냅샷으로 제한해 수정 권한을 막는다.
 - Tests는 Domain·Engine만 → View 없는 환경에서 빠르게 단위 테스트.
 
-이 단방향 구조가 [BATTLE_DESIGN §2.1 3계층 분리](../BATTLE_DESIGN.md)의 본질이다.
+즉, 이 구조에서 asmdef는 **의존 방향**을 강제하고, 스냅샷/읽기 전용 타입은 **데이터 수정 경계**를 강제한다. 이 둘이 함께 있어야 [BATTLE_DESIGN §2.1 3계층 분리](../BATTLE_DESIGN.md)의 의도가 제대로 살아난다.
 
 **참고**: Unity 공식 문서 — [Assembly Definitions](https://docs.unity3d.com/Manual/assembly-definition-files.html).
 
@@ -145,10 +149,10 @@ position += speed * Time.deltaTime;
 해결: 시간을 **인터페이스로 추상화**한다.
 
 ```csharp
-public interface ITickService { event Action<float> OnTick; ... }
+public interface ITickService { event Action<float> Ticked; ... }
 ```
 
-- 런타임 구현은 `Update` 안에서 0.05초마다 OnTick 호출.
+- 런타임 구현은 `Update` 안에서 0.05초마다 Ticked 호출.
 - 테스트 구현은 `PumpTicks(100)` 호출로 100번 호출 → 100×0.05=5초 시뮬레이션.
 - MindGame 페이즈 일시정지는 `Pause()` 한 줄로 끝.
 
@@ -186,14 +190,14 @@ MurimRunaway.Battle.Tests
 ## 9. 상태 객체 전달 방식 — 왜 매 틱 `new`인가, 언제 바꾸는가
 
 ### 결정
-`BattleState`는 `readonly struct`로 만들고, Engine이 매 틱 `new BattleState(...)`로 새 인스턴스를 만들어 `event Action<BattleState>`로 View에 전달한다.
+`BattleSnapshot`는 `readonly struct`로 만들고, Engine이 매 틱 `new BattleSnapshot(...)`로 새 인스턴스를 만들어 `event Action<BattleSnapshot>`로 View에 전달한다.
 
 ### 대안과 트레이드오프
 "엔진이 단일 mutable struct를 들고, `in`(`ref readonly`) 파라미터를 가진 커스텀 delegate로 호출" 패턴도 문법적으로 가능하다.
 
 ```csharp
-public delegate void BattleStateHandler(in BattleState state);
-public event BattleStateHandler OnStateChanged;
+public delegate void BattleSnapshotHandler(in BattleSnapshot state);
+public event BattleSnapshotHandler OnStateChanged;
 // ...
 OnStateChanged?.Invoke(in _state);   // 복사 0, 박싱 0
 ```
@@ -228,8 +232,8 @@ OnStateChanged?.Invoke(in _state);   // 복사 0, 박싱 0
 - [ ] "결정적 RNG"가 무슨 뜻인지 다른 사람에게 설명할 수 있는가?
 - [ ] `BattleEngine`이 `UnityTickService` 대신 `ITickService`를 받는 이유는?
 - [ ] EditMode 테스트와 PlayMode 테스트의 선택 기준은?
-- [ ] `BattleState`를 `readonly struct`로 만든 이유는?
-- [ ] `BattleState`를 매 틱 `new`로 만드는 게 왜 비싸지 않은가? 언제 비싸지는가?
+- [ ] `BattleSnapshot`를 `readonly struct`로 만든 이유는?
+- [ ] `BattleSnapshot`를 매 틱 `new`로 만드는 게 왜 비싸지 않은가? 언제 비싸지는가?
 
 ---
 

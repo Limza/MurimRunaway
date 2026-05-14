@@ -17,51 +17,44 @@
 |------|----|
 | 문서 종류 | 에셋 생성 워크플로 |
 | 대상 | 무림도망자 정식 게임 — 전 에셋 |
-| 버전 | 0.1 (초안) |
-| 마지막 수정 | 2026-05-04 |
+| 버전 | 0.3 |
+| 마지막 수정 | 2026-05-11 |
 
 ---
 
 ## 1. 원칙
 
-1. **무료 우선** — 솔로 개발 비용 디폴트는 0. 유료는 무료 대비 명확한 품질·시간 이득이 있을 때만 도입 (§7 의사결정 트리).
+1. **기본 생성기는 GPT 이미지** — 현재 개발 단계에서는 별도 툴 학습 비용보다 빠른 시안 생성·대화식 수정의 이득이 더 크다.
 2. **상업 라이선스 검증 의무** — Steam 판매 빌드에 들어가는 모든 자산은 상업 사용이 명시된 도구·모델·소스에서만. 모호하면 사용 금지.
 3. **AI 생성 우선, 자작·외주 없음** — 일러스트·아이콘·SFX·BGM 모두 AI. UI 표준 요소는 무료 CC0 키트 픽업 허용.
 4. **무협 톤·색 코드 준수** — TOTAL_DESIGN §9.2 (무공 4분류), §9.3 (분파 5색)을 프롬프트와 후처리에 반영.
 5. **Placeholder는 가능한 한 오래** — 코드 Phase가 막히지 않게. 실에셋 진입 시점은 [MILESTONES.md](MILESTONES.md) §3 참조.
+6. **수동 생성 기준의 현실적인 일관성 관리** — GPT 이미지는 SD식 시드 재현성보다 기준 이미지 재사용·동일 세션 작업·짧은 수정 루프가 더 중요하다.
 
 ---
 
 ## 2. 도구 스택
 
-### 2.1 무료 + 상업 라이선스 명확 (출시 빌드용)
+### 2.1 출시 빌드용 기본 스택
 
-| 용도 | 도구 | 라이선스 |
-|------|------|---------|
-| 이미지 (전체) | **Stable Diffusion 로컬** (ComfyUI / Automatic1111) + SDXL/SD1.5 base | CreativeML Open RAIL-M — 상업 OK (커스텀 체크포인트는 개별 확인) |
-| 이미지 (전체, 브라우저) | **Flux.1 Schnell** (HuggingFace Spaces 또는 fal.ai 무료 티어) | Apache 2.0 — 상업 OK |
-| 이미지 후처리 | **GIMP** / **Krita** | GPL — 상업 OK |
+| 용도 | 도구 | 비고 |
+|------|------|------|
+| 이미지 (기본) | **ChatGPT Images / GPT 이미지** | 현재 프로젝트의 기본 생성기. 빠른 시안·수정·대화식 반복에 최적 |
+| 이미지 (자동화/대량 반복 필요 시) | **GPT Image API** | 별도 API 과금. 파일명 규칙·폴더 적재·후처리 스크립트 연결용 |
+| 이미지 후처리 | **GIMP** / **Krita** | 자르기, 배경 정리, 색 보정, 크기 정규화 |
+| UI 키트 | **Kenney.nl** | CC0 — 무제한 |
 | 효과음 (SFX) | **Pixabay** SFX (CC0) / **Freesound.org** (CC0/CC-BY 필터) | CC0 = 무제한 / CC-BY = 크레딧 표기 |
 | BGM | **Pixabay Music** (CC0) | CC0 — 무제한 |
-| UI 키트 | **Kenney.nl** | CC0 — 무제한 |
 | 한국어 폰트 | **Pretendard**, **나눔체** 계열 | OFL — 상업 OK |
 
-### 2.2 무료 사용 가능, 단 조건 있음
+### 2.2 보조/대체 도구
 
-| 도구 | 조건 | 권장 용도 |
-|------|------|----------|
-| **Leonardo.ai** 무료 (일 150 토큰) | 상업 OK이지만 결과물이 공개 갤러리에 노출됨 (다른 사용자가 볼 수 있음). Leonardo가 결과물 재배포 라이선스 보유. | 빠른 시안·실험. 출시 빌드에 들어갈 결정본은 Pro 또는 §2.1 도구로 재생성 권장 |
-| **ElevenLabs SFX** 무료 티어 | 월 생성 한도. 무료 티어는 attribution 요구. | 실험 후 Pro 결정 |
-| **Suno** / **Udio** 무료 | **상업 사용 불가** — Pro/Premier 필요 | 무료 티어는 BGM 톤 탐색에만, 출시 빌드 사용 금지 |
-
-### 2.3 명시적으로 사용 금지
-
-| 도구·모델 | 이유 |
-|----------|------|
-| **Flux.1 Dev** 모델 | FLUX.1 [dev] Non-Commercial License — 상업 빌드 금지. Schnell 또는 Pro API만. |
-| **Microsoft Designer / Bing Image Creator** (DALL-E 3) | MSA가 상업 사용을 명시 보장하지 않음. 책임이 사용자에게 전가됨 — 출시 빌드 사용 비권장. 프로토타이핑만. |
-| **Suno / Udio 무료 티어** | 상업 사용 불가 (위) |
-| 라이선스 불명 Civitai 커스텀 체크포인트 | 모델 카드의 "Commercial use" 항목이 No 또는 Image Sales Only인 경우 게임 빌드 사용 금지 |
+| 용도 | 도구 | 사용 조건 |
+|------|------|-----------|
+| 이미지 (대량 배치·API 친화) | **Leonardo.Ai** / **FLUX API** | GPT 수동 작업이 병목일 때만 검토 |
+| 이미지 (벡터/UI 보조) | **Recraft** | UI·벡터 자산 비중이 커질 때만 검토 |
+| 효과음 2차 생성 | **ElevenLabs SFX 유료** | Pixabay에 적합한 소스가 없을 때 |
+| BGM 2차 생성 | **Suno Pro 유료** | Pixabay Music으로 부족할 때 |
 
 ---
 
@@ -90,17 +83,33 @@
 
 ## 4. 에셋 타입별 워크플로
 
+### 4.0 GPT 이미지 공통 작업 규칙
+
+1. **한 번에 한 카테고리만 작업** — 아이콘 세션, 포트레이트 세션, 결말 세션을 분리한다.
+2. **첫 결과를 기준 이미지로 삼아 같은 대화/세션에서 이어 수정** — 새 채팅으로 흩어지면 톤이 흔들린다.
+3. **프롬프트를 매번 새로 쓰기보다 수정 지시를 누적** — "같은 스타일 유지, 배경만 단순화" 같은 식으로 단계적으로 다듬는다.
+4. **기준 샘플을 먼저 1~3장 확보** — 수량을 늘리기 전 톤을 고정한다.
+5. **최종본만 Final로 이동** — 시안은 `Generated/`, 채택본은 `Final/`.
+
 ### 4.1 아이콘 (무공·방어·오의·적 패턴 등 — 60+개)
 
-**도구**: Flux.1 Schnell (HuggingFace Spaces 무료) 또는 SD 로컬 SDXL.
+**도구**: ChatGPT Images.
 
-**프롬프트 템플릿**:
-```
+**기본 프롬프트 템플릿**:
+```text
 A martial arts skill icon, {무공명} - {효과 한 문장},
 ink wash painting on parchment, single centered subject,
 high contrast, {색} accent (#XXXXXX),
+subtle rough pixel texture only on the surface and edges,
+not full pixel art, keep it as a sharp readable 2D ink icon,
 square 1:1, no text, no watermark, no border
 ```
+
+**권장 수정 루프**:
+- 1차: 모티프와 톤 확인
+- 2차: 배경 단순화, 아이콘 중심 피사체 강조
+- 3차: 작은 크기에서도 식별되도록 형태 대비 강화
+- 4차: 필요할 때만 표면과 가장자리에 아주 약한 픽셀 질감 추가, 전체를 정통 픽셀아트처럼 낮은 해상도로 만들지 않기
 
 **색 매핑** (TOTAL_DESIGN §9.2):
 | 분류 | 색 |
@@ -119,23 +128,24 @@ square 1:1, no text, no watermark, no border
 - [ ] 4분류 색이 한 화면에서 즉시 구분되는가
 - [ ] 같은 분류 내 형태가 너무 비슷하지 않은가 (실루엣 테스트 — 흑백 변환 후 구분되는가)
 - [ ] 256×256으로 축소해도 의미 전달되는가
+- [ ] 거친 픽셀 질감이 "표면 텍스처"로만 느껴지고, 정통 도트 아이콘처럼 가독성을 해치지 않는가
 
-**예상 반복**: 1 아이콘당 3~5 generation → 1 채택. 60+개 = ~250회 생성.
+**예상 반복**: 1 아이콘당 2~4회 수정 루프 → 1 채택.
 
 ### 4.2 캐릭터 포트레이트 (적·재능·보스)
 
-**도구**: SD 로컬 + 일관성을 위한 LoRA 또는 Flux Schnell + reference image.
+**도구**: ChatGPT Images.
 
 **프롬프트 템플릿** (적):
-```
+```text
 Wuxia character portrait, {잡적|자객|무림고수|...},
 ink wash painting style, traditional East Asian martial arts setting,
 half body, neutral background,
-{분파 색} ambient lighting, no text
+{분파 색} ambient lighting, parchment background, no text
 ```
 
 **프롬프트 템플릿** (재능 — 천무지체/카피/대종사):
-```
+```text
 Wuxia protagonist portrait, {재능 한 문장 묘사},
 ink wash painting, half body, dignified expression,
 parchment background, no text
@@ -145,14 +155,17 @@ parchment background, no text
 - 생성: 768×1024 PNG (세로 비율)
 - Unity 임포트: Sprite, 384×512로 다운샘플 (UI 표시 사이즈)
 
-**일관성 확보**: 동일 generation 세션 + 동일 시드 변형으로 batch. 다른 세션에서 만들면 톤이 어긋남 — 모든 캐릭터를 한 시점에 묶어 생성.
+**일관성 확보**:
+- 같은 대화에서 연속 생성
+- 첫 채택본을 기준 이미지처럼 삼아 "이전 인물과 같은 화풍 유지"를 반복 지시
+- 적/재능/보스는 세션을 섞지 않는다
 
 ### 4.3 결말 일러스트 (5장)
 
-**도구**: SD 로컬 SDXL (또는 Flux Schnell). **반드시 한 세션에서 batch 생성** — 5장의 톤 통일이 핵심.
+**도구**: ChatGPT Images.
 
 **프롬프트 템플릿** (분파별):
-```
+```text
 Wuxia ending scene, {분파별 묘사},
 cinematic ink wash, painterly composition, 16:9,
 no text, no characters facing camera, no watermark
@@ -170,7 +183,10 @@ no text, no characters facing camera, no watermark
 - 생성: 1920×1080 PNG (16:9)
 - Unity 임포트: Sprite, Default settings (UI 또는 Background로 사용)
 
-**검수**: 5장을 한 화면에 늘어놓고 톤 비교 — 색온도·붓터치·디테일 수준이 어긋난 장이 있으면 그 장만 재생성.
+**검수**:
+- 5장을 같은 작업 세션 안에서 생성
+- 기준 장면 1장을 먼저 정하고 나머지 4장을 그 톤으로 유도
+- 5장을 한 화면에 늘어놓고 색온도·붓터치·디테일 수준 비교
 
 ### 4.4 UI 요소 (버튼·패널·게이지·차징 표시)
 
@@ -182,7 +198,7 @@ no text, no characters facing camera, no watermark
 **색 변경**: GIMP/Krita에서 Hue 시프트 또는 Unity Material로 tint.
 
 **필요 요소**:
-- 직사각 패널 (방어 5택용)
+- 직사각 패널 (방어 4택용)
 - 원형 슬롯 (무공 슬롯용)
 - 가로 게이지 (HP/내공)
 - 스택 바 (기세 0~10)
@@ -193,7 +209,7 @@ no text, no characters facing camera, no watermark
 **1차 시도**: Pixabay SFX 무료 픽업 (CC0).
 - "wood click", "gong alert", "whoosh impact", "victory chime", "defeat tone"
 
-**2차 (Pixabay에 적합한 게 없을 때)**: ElevenLabs SFX 무료 티어로 텍스트→SFX 생성.
+**2차 (Pixabay에 적합한 게 없을 때)**: ElevenLabs SFX **유료** 티어로 텍스트→SFX 생성.
 
 **프롬프트 예**:
 - UI 클릭: `soft wood click, single tap, 0.2s`
@@ -208,7 +224,7 @@ no text, no characters facing camera, no watermark
 
 - **출시 직전 단계**. M10까지 BGM 없이 진행해도 됨 (TOTAL_DESIGN §12 C-8 미결).
 - 1차: **Pixabay Music**에서 동양/명상/타악 키워드로 CC0 트랙 픽업.
-- 분파별 1트랙 결정 시: Pixabay에 적합한 게 없으면 Suno **Pro 유료** ($10/월)로 전환 — 무료 티어 상업 사용 불가.
+- 분파별 1트랙 결정 시: Pixabay에 적합한 게 없으면 Suno **Pro 유료**로 전환.
 
 ---
 
@@ -228,19 +244,20 @@ no text, no characters facing camera, no watermark
 
 ## 6. 의사결정 트리 (새 에셋 필요할 때)
 
-```
+```text
 새 에셋 필요
    │
    ├─ UI 표준 요소? ─ Kenney.nl 픽업 → 색만 변경 (90% 케이스)
    │
-   ├─ 한정 일러스트(결말 5장)? ─ SD 로컬 SDXL batch (한 세션에 묶음)
+   ├─ 아이콘/포트레이트/결말 시안? ─ ChatGPT Images에서 먼저 생성
    │
-   ├─ 반복 아이콘(무공·방어·오의)? ─ Flux Schnell HF Space (브라우저)
-   │                                  GPU 있으면 SD 로컬 더 빠름
+   ├─ 같은 톤으로 후속 수정 필요? ─ 같은 대화에서 기준 이미지 유지하며 수정
    │
-   ├─ 캐릭터 포트레이트? ─ SD 로컬 (LoRA로 일관성) > Flux Schnell
+   ├─ 수십 장 반복 생성/자동 저장 필요? ─ GPT Image API 검토
    │
-   ├─ SFX? ─ Pixabay 픽업 → 없으면 ElevenLabs SFX
+   ├─ GPT 수동 작업이 병목? ─ Leonardo.Ai / FLUX API 재검토
+   │
+   ├─ SFX? ─ Pixabay 픽업 → 없으면 ElevenLabs SFX Pro
    │
    └─ BGM? ─ Pixabay 픽업 → 출시 직전 부족하면 Suno Pro 검토
 ```
@@ -251,9 +268,9 @@ no text, no characters facing camera, no watermark
 
 | # | 항목 | 결정 시점 |
 |---|------|----------|
-| AP-1 | SD 로컬 셋업 가능한 GPU 여부 | M5 진입 전 — 안 되면 Flux Schnell HF로 단일화 |
-| AP-2 | Leonardo.ai Pro ($10~12/월) 도입 여부 | 무료로 일관성 확보가 한계일 때 재고 |
-| AP-3 | Suno Pro ($10/월) BGM 5트랙 외주 대체로 도입 | 출시 6개월 전 |
+| AP-1 | GPT Image API를 실제 파이프라인에 붙일지 여부 | M5 진입 전 — 수동 작업량이 병목이면 검토 |
+| AP-2 | Leonardo.Ai / FLUX API 보조 도입 여부 | GPT 일관성 또는 작업 속도가 한계일 때 재고 |
+| AP-3 | Suno Pro BGM 5트랙 외주 대체 도입 | 출시 6개월 전 |
 | AP-4 | 결말 일러스트만 외주 (Krea·Recraft 유료 또는 인간 작가) | 출시 6개월 전 |
 | AP-5 | 무공 아이콘 신규 생성 vs CC0 무협 아이콘 팩 픽업 비율 | M5 진입 직후 |
 
@@ -262,11 +279,11 @@ no text, no characters facing camera, no watermark
 ## 8. 라이선스 점검 체크리스트 (출시 빌드 전 매 자산 1회)
 
 - [ ] 도구 약관에 상업 사용 명시
-- [ ] 모델/체크포인트 라이선스 명시 (특히 SD 커스텀)
+- [ ] API 사용 시 별도 과금/보관 정책 확인
 - [ ] CC-BY 자산은 크레딧 표기 준비됨
 - [ ] CC0 자산은 출처 기록 (의무 아님이지만 추적용)
 - [ ] 폰트 라이선스 OFL/Apache 등 명시
-- [ ] 도구 약관 변경분 분기당 1회 재확인 (특히 Microsoft, Suno, Leonardo)
+- [ ] 도구 약관 변경분 분기당 1회 재확인 (특히 OpenAI, Suno, Leonardo)
 
 ---
 
@@ -274,4 +291,6 @@ no text, no characters facing camera, no watermark
 
 | 날짜 | 버전 | 변경 |
 |------|------|------|
-| 2026-05-04 | 0.1 | 초안 — 무료 우선 도구 스택, 카테고리별 워크플로, MS Designer/Flux Dev/Suno 무료를 출시 빌드 금지로 명시 |
+| 2026-05-04 | 0.1 | 초안 — 무료 우선 도구 스택, 카테고리별 워크플로 |
+| 2026-05-11 | 0.2 | 상업 사용 불가/조건부 도구(§2.3 금지 목록, Suno/Udio 무료, Leonardo 무료, ElevenLabs 무료) 삭제 — 출시 빌드 후보만 남김 |
+| 2026-05-11 | 0.3 | **기본 생성기를 GPT 이미지로 전환**. SD/Flux 중심 워크플로 삭제, ChatGPT Images 수동 생성 + GPT Image API 보조 구조로 재정리 |
