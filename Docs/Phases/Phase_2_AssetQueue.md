@@ -19,7 +19,7 @@
 
 | 항목 | 값 |
 |------|----|
-| 대상 Phase | Phase 2 (자원 4종 + VContainer) |
+| 대상 Phase | Phase 2 (자원 2종 + VContainer) |
 | 본 Phase 자체 에셋 부담 | ─ (없음) |
 | 병렬 큐 트랙 | Track A (전투 아이콘) — M5/M6/M8 대비 |
 | 마지막 수정 | 2026-05-14 |

@@ -358,10 +358,10 @@ ActorView 확장 (Player 한정):
 - GainMana가 maxMana를 초과하려 할 때 → `min(mana + amount, maxMana)` 로 클램프 (silent).
 
 **Acceptance**:
-- [ ] EditMode: SpendMana로 0 미만이 되는 시도가 false 반환 + 값 불변.
-- [ ] EditMode: GainMana가 maxMana 초과 시 maxMana로 클램프.
-- [ ] PlayMode: 화면에 HP·내공 게이지 표시.
-- [ ] PlayMode: VContainer LifetimeScope에서 의존성 주입 동작 (Phase 1 흐름 회귀 없음).
+- [x] EditMode: SpendMana로 0 미만이 되는 시도가 false 반환 + 값 불변.
+- [x] EditMode: GainMana가 maxMana 초과 시 maxMana로 클램프.
+- [x] PlayMode: 화면에 HP·내공 게이지 표시.
+- [x] PlayMode: VContainer LifetimeScope에서 의존성 주입 동작 (Phase 1 흐름 회귀 없음).
 
 ---
 

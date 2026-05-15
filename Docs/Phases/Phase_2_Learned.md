@@ -109,6 +109,31 @@ Phase 1의 [§1.6 ActorView](Phase_1_Guide.md)는 Player/Enemy가 같은 struct�
 >
 > Zenject가 아니라 **VContainer**를 고른 이유: IL2CPP·AOT 호환이 더 매끄럽고, reflection 기반 모드가 학습용으로 단순. 코드 생성(`InstallerCodeGen`) 없이도 기본 동작.
 
+### 6.1 `Configure` 등록 문법 한 줄씩
+
+`BattleLifetimeScope.Configure(IContainerBuilder builder)`는 씬 시작 시 VContainer가 **한 번** 호출하는 등록 단계다. 여기선 "이 타입이 필요하면 이렇게 만들어라"를 `builder`에 선언만 하고, 실제 `new`와 주입은 컨테이너가 한다. 우리가 `new BattleEngine(...)`을 직접 안 쓰는 이유 — 조립 책임이 컨테이너로 넘어감.
+
+```csharp
+builder.RegisterComponent<ITickService>(_tickService);
+builder.Register<IRngService, RngService>(Lifetime.Singleton);
+builder.Register<BattleEngine>(Lifetime.Singleton).AsSelf().As<IResourceMutator>();
+builder.RegisterComponentInHierarchy<BattleSceneController>();
+```
+
+| 호출 | 무엇을 등록하나 | 왜 이 메서드인가 |
+|------|----------------|-----------------|
+| `RegisterComponent<ITickService>(_tickService)` | 씬에 **이미 살아있는** MonoBehaviour 인스턴스를 `ITickService` 얼굴로 | MonoBehaviour는 `new` 금지 → 컨테이너가 만들면 안 됨. Inspector로 꽂은 그 인스턴스를 "그대로 써라" |
+| `Register<IRngService, RngService>(Singleton)` | `IRngService` 요청 시 컨테이너가 `new RngService()` | `RngService`는 평범한 POCO → 컨테이너가 생성 가능. `Singleton` = 컨테이너 수명 동안 1개만, RNG 시드 상태를 한 곳에서 공유해야 결정론 유지 |
+| `Register<BattleEngine>(Singleton)` `.AsSelf()` `.As<IResourceMutator>()` | **인스턴스 1개**를 두 얼굴(`BattleEngine`, `IResourceMutator`)로 동시에 | Phase 3 스킬 코드는 `IResourceMutator`만, 진군 로직은 `BattleEngine`을 받음 → 둘 다 **물리적으로 같은 객체**여야 함. `.As<>()` 빼면 `IResourceMutator` 요청 시 "등록 안 됨" 에러 |
+| `RegisterComponentInHierarchy<BattleSceneController>()` | 씬 하이어라키를 스캔해 찾은 `BattleSceneController` | Inspector 슬롯에 직접 안 꽂아도 됨. 이게 의존성 그래프의 **진입점** — 컨테이너가 이걸 만들며 위 1~3을 `[Inject]` 메서드에 꽂아줌 |
+
+**핵심 청크 2개**:
+- `RegisterComponent*` 계열 = "이미 존재하는 MonoBehaviour를 가리켜라" (컨테이너가 안 만듦).
+- `Register<I, Impl>` = "POCO를 컨테이너가 new 해라". `.AsSelf().As<X>()` 체인은 *같은 인스턴스를 여러 타입으로* 노출하는 별칭.
+
+> **함정 — `.AsSelf()`는 왜 redundant가 아닌가**
+> `Register<BattleEngine>()` 단독이면 BattleEngine으로 자동 resolvable이라 `.AsSelf()`가 필요 없다. 하지만 **`.As<T>()`를 하나라도 체인하는 순간 VContainer는 암묵적 self 등록을 취소**한다 → 그 인스턴스는 `T`로만 resolvable. 그래서 `BattleEngine`·`IResourceMutator` 양쪽으로 받아야 하는 우리 경우, `.AsSelf()`는 `.As<>()`가 꺼버린 self 등록을 **되살리는** 필수 호출이다. (`.As<>()` 없으면 self 자동 → `.AsSelf()` 불필요 / `.As<>()` 있으면 self 취소 → `.AsSelf()` 필수)
+
 ---
 
 ## 7. ScriptableObject는 자원 컨테이너로 쓰면 안 된다

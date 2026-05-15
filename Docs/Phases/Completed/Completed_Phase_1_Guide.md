@@ -113,7 +113,7 @@ namespace MurimRunaway.Battle.Domain
 ```
 
 >
-> Phase 2에서 `PlayerActor`가 자원 4종(HP/내공/기세/오성) 컨테이너를 추가로 갖게 된다. 지금은 `MoveSpeed`만. `EnemyActor`도 Phase 3+에서 무공 슬롯·쿨다운 등 전용 필드가 채워진다.
+> Phase 2에서 `PlayerActor`가 자원 2종(HP/내공) 컨테이너를 추가로 갖게 된다. 지금은 `MoveSpeed`만. `EnemyActor`도 Phase 3+에서 무공 슬롯·쿨다운 등 전용 필드가 채워진다.
 >
 
 ### 1.3 무엇을 만드는가 — `EnemyData` (ScriptableObject)
@@ -741,4 +741,4 @@ git commit -m "Phase 1: actor & distance axis (1D approach, Resolve, determinist
 
 ## 8. Phase 1 → Phase 2 진입 조건
 
-§5 체크리스트 4개 + 커밋 완료. Phase 2는 [BATTLE_DESIGN §3 Phase 2](../BATTLE_DESIGN.md)에서 자원 4종(HP/내공/기세/오성) 컨테이너를 도입한다.
+§5 체크리스트 4개 + 커밋 완료. Phase 2는 [BATTLE_DESIGN §3 Phase 2](../BATTLE_DESIGN.md)에서 자원 2종(HP/내공) 컨테이너와 `IResourceMutator`, VContainer를 도입한다.

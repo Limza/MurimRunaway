@@ -427,7 +427,7 @@ Phase 1 종료 시점의 [BattleSceneController.Start()](../../Assets/_Project/S
 ### 4.2 VContainer 설치
 
 1. Unity Editor: **Window → Package Manager → +(좌상단) → Add package from git URL**
-2. 입력: `https://github.com/hadashiA/VContainer.git?path=VContainer/Assets/VContainer#1.16.9` (최신 안정 태그 확인 후 갱신)
+2. 입력: `https://github.com/hadashiA/VContainer.git?path=VContainer/Assets/VContainer#1.18.0` (1.18.0 = 2026-05-15 기준 최신 안정. 설치 시점에 [releases](https://github.com/hadashiA/VContainer/releases)에서 재확인 후 갱신)
 3. asmdef 갱신: `MurimRunaway.Battle.View` asmdef의 `references`에 `VContainer` 추가.
 
 > VContainer를 고른 이유: Zenject 대비 IL2CPP·AOT 호환 + 코드 생성 없는 reflection 모드 + 학습용 친화적 문서. 모바일 빌드(Android 우선)에 안전.
@@ -479,12 +479,10 @@ public sealed class BattleSceneController : MonoBehaviour
     [SerializeField] private RectTransform _enemyMarkerPrefab;
     [SerializeField] private ResourceBar _hpBar;
     [SerializeField] private ResourceBar _manaBar;
-    [SerializeField] private ResourceBar _momentumBar;
-    [SerializeField] private TMP_Text _wisdomText;
 
     [SerializeField] private int _seed = 1;
     [SerializeField] private int _playerMaxHp = 50;
-    [SerializeField] private float _playerMoveSpeed = 5f;
+    [SerializeField] private float _playerMoveSpeed = 10f;
     [SerializeField] private EnemyData[] _enemyDatas;
 
     private BattleEngine _engine;
@@ -572,15 +570,16 @@ namespace MurimRunaway.Battle.Tests
         [Test]
         public void 내공이_부족하면_SpendMana는_false를_반환하고_값은_그대로다()
         {
-            IResourceMutator mutator = CreateEngine();
+            var engine = CreateEngine();
+            IResourceMutator mutator = engine;
 
             var ok = mutator.SpendMana(60); // 시작 50, 60 시도
-
             Assert.IsFalse(ok);
-            // 스냅샷으로 검증
-            ((BattleEngine)mutator).Start();
+
             BattleSnapshot snapshot = default;
-            ((BattleEngine)mutator).SnapshotPublished += s => snapshot = s;
+            engine.SnapshotPublished += s => snapshot = s;
+            engine.Start();
+
             Assert.AreEqual(50, snapshot.Actors[0].Mana);
         }
 
@@ -610,10 +609,10 @@ namespace MurimRunaway.Battle.Tests
 
 [BATTLE_DESIGN §3 Phase 2 Acceptance](../BATTLE_DESIGN.md) + M2 추가:
 
-- [ ] EditMode: SpendMana로 0 미만이 되는 시도가 false 반환 + 값 불변. (§5.1)
-- [ ] EditMode: GainMana가 maxMana 초과 시 maxMana로 클램프. (§5.1)
-- [ ] PlayMode: 화면에 HP·내공 게이지 표시.
-- [ ] PlayMode: VContainer LifetimeScope에서 의존성 주입 동작 확인 — Play 시 NullReferenceException 없이 Phase 1 흐름 그대로 재현.
+- [x] EditMode: SpendMana로 0 미만이 되는 시도가 false 반환 + 값 불변. (§5.1)
+- [x] EditMode: GainMana가 maxMana 초과 시 maxMana로 클램프. (§5.1)
+- [x] PlayMode: 화면에 HP·내공 게이지 표시.
+- [x] PlayMode: VContainer LifetimeScope에서 의존성 주입 동작 확인 — Play 시 NullReferenceException 없이 Phase 1 흐름 그대로 재현.
 
 ---
 

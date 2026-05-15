@@ -9,7 +9,6 @@ namespace MurimRunaway.Battle.View
     /// <summary>씬에서 Engine·View·TickService를 조립·연결하는 접착제.</summary>
     public sealed class BattleSceneController : MonoBehaviour
     {
-        [SerializeField] private UnityTickService _tickService;
         [SerializeField] private TMP_Text _counterText;
         [SerializeField] private RectTransform _gauge;
         [SerializeField] private RectTransform _playerMarker;
@@ -26,11 +25,14 @@ namespace MurimRunaway.Battle.View
         private RectTransform[] _enemyMarkers;
         private float _worldMax;
 
+        [VContainer.Inject]
+        public void Construct(BattleEngine engine)
+        {
+            _engine = engine;
+        }
 
         private void Start()
         {
-            var rng = new RngService();
-            _engine = new BattleEngine(_tickService, rng);
             _engine.SnapshotPublished += HandleSnapshot;
             
             _worldMax = _enemyDatas.Max(enemyData => enemyData.SpawnPosition);

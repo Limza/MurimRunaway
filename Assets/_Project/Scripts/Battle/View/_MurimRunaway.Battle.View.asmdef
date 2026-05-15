@@ -4,7 +4,8 @@
     "references": [
         "MurimRunaway.Battle.Domain",
         "MurimRunaway.Battle.Engine",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "VContainer"
     ],
     "autoReferenced": false
 }

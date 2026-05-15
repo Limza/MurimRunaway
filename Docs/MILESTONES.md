@@ -54,7 +54,7 @@
 |---|-------|------|------|------|
 | **M0** | P0 Foundation | S | — | 폴더·asmdef·Mock 서비스, 컴파일 골격 |
 | **M1** | P1 Actor & 거리축 | S | — | Player/Enemy POCO + 진군·시간축 |
-| **M2** | P2 자원 4종 | S | — | HP·내공·기세·오성 컨테이너 |
+| **M2** | P2 자원 2종 + VContainer | S | — | HP·내공 컨테이너 + mutator + DI |
 | **M3** | P3 무공 자동 시전 | M | — | SkillData SO + 자동 결정 트리 (오토배틀 코어) |
 | **M4** | P4 일반 공격·데미지·승패 | M | — | 데미지 적용·사망·BattleResult |
 | **M5** | P5 강공 분기 — **보스전 한정** | M | M | 매트릭스 + MindGame UI (`isBoss` 게이팅) |
@@ -98,7 +98,7 @@ AI 이미지 생성 대기시간이 길어 코드 Phase의 직렬 진행을 막�
 - v3와 동일. v4에서도 1D 거리축 유지(사이드스크롤 오토배틀과 호환).
 - **Done**: P1 Acceptance 4개.
 
-### M2 — Phase 2 자원 4종 (S / —)
+### M2 — Phase 2 자원 2종 + VContainer (S / —)
 - v3와 동일.
 - **신규(v4)**: VContainer 도입 — Phase 1 종료 시점에 의존성(`UnityTickService` / `IRngService` / `BattleEngine` / `BattleSceneController`)이 5개 근방으로 커진 시점에 LifetimeScope로 조립 위임. 학습 목적 겸함.
 - **Done**: P2 Acceptance 3개 + 컨테이너에서 의존성 주입 동작 확인.
