@@ -5,7 +5,7 @@ using MurimRunaway.Battle.Domain;
 namespace MurimRunaway.Battle.Engine
 {
     /// <summary>전투 시뮬레이션 본체. 틱마다 상태를 진행시키고 SnapshotPublished으로 통보.</summary>
-    public sealed class BattleEngine
+    public sealed class BattleEngine : IResourceMutator
     {
         private readonly ITickService _tick;
         private readonly IRngService _rng;
@@ -42,6 +42,8 @@ namespace MurimRunaway.Battle.Engine
                 Id = 0,
                 Hp = data.Player.MaxHp,
                 MaxHp = data.Player.MaxHp,
+                Mana = data.Player.StartingMana,
+                MaxMana = data.Player.MaxMana,
                 Position = 0f,
                 MoveSpeed = data.Player.MoveSpeed,
                 AttackRange = data.Player.AttackRange,
@@ -58,7 +60,22 @@ namespace MurimRunaway.Battle.Engine
                 State = ActorState.Idle,
                 SourceId = enemyData.Id,
             }).ToArray();
-        } 
+        }
+
+        public bool SpendMana(int amount)
+        {
+            if (amount > _player.Mana)
+                return false;
+            
+            _player.Mana -= amount;
+            return true;
+        }
+
+        public void GainMana(int amount)
+        {
+            var nextMana = _player.Mana + amount;
+            _player.Mana = Math.Min(nextMana, _player.MaxMana);
+        }
 
         public void Start() 
         { 

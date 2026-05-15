@@ -14,11 +14,13 @@ namespace MurimRunaway.Battle.View
         [SerializeField] private RectTransform _gauge;
         [SerializeField] private RectTransform _playerMarker;
         [SerializeField] private RectTransform _enemyMarkerPrefab;
+        [SerializeField] private EnemyData[] _enemyDatas;
+        [SerializeField] private ResourceBar _hpBar;
+        [SerializeField] private ResourceBar _manaBar;
 
         [SerializeField] private int _seed = 1;
         [SerializeField] private int _playerMaxHp = 50;
         [SerializeField] private float _playerMoveSpeed = 10f;
-        [SerializeField] private EnemyData[] _enemyDatas;
 
         private BattleEngine _engine;
         private RectTransform[] _enemyMarkers;
@@ -61,6 +63,12 @@ namespace MurimRunaway.Battle.View
             {
                 var marker = actor.IsPlayer ? _playerMarker : _enemyMarkers[actor.Id - 1];
                 marker.anchoredPosition = new Vector2(actor.Position / _worldMax * gaugeWidth, 0f);
+
+                if (actor.IsPlayer)
+                {
+                    _hpBar.SetValue(actor.Hp, actor.MaxHp);
+                    _manaBar.SetValue(actor.Mana, actor.MaxMana);
+                }
             }
         }
     }   

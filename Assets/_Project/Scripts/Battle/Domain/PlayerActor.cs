@@ -4,5 +4,7 @@ namespace MurimRunaway.Battle.Domain
     public sealed class PlayerActor : Actor
     {
         public float MoveSpeed;
+        public int Mana;
+        public int MaxMana;
     }
 }

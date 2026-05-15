@@ -4,6 +4,8 @@ namespace MurimRunaway.Battle.Domain
     public sealed class PlayerStartData
     {
         public int MaxHp;
+        public int MaxMana = 100;
+        public int StartingMana = 50;
         public float MoveSpeed = 5f;
         public float AttackRange = 20f;
     }

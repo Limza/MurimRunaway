@@ -221,13 +221,13 @@ public sealed class BattleEngine : IResourceMutator
 
     public void GainMana(int amount)
     {
-        var next = _player.Mana + amount;
-        _player.Mana = next > _player.MaxMana ? _player.MaxMana : next;
+        var nextMana = _player.Mana + amount;
+        _player.Mana = Math.Min(nextMana, _player.MaxMana);
     }
 }
 ```
 
-> **왜 Mathf.Clamp가 아니라 직접 비교?** Engine asmdef는 가능한 한 UnityEngine 의존을 끊는다 (`Mathf`는 UnityEngine). 두 줄 더 쓰는 비용으로 결정론 빌드 분리를 유지.
+> **왜 `Mathf`가 아니라 `System.Math`?** Engine asmdef는 UnityEngine 의존을 끊는다 — `Mathf.Min`/`Mathf.Clamp`는 UnityEngine이라 금지. 반면 `System.Math.Min(int, int)`은 .NET BCL이고 정수 정확 비교라 결정론도 삼항 비교와 동일하므로 안전. min을 손수 삼항으로 풀지 말고 `Math.Min`을 쓴다 — 이미 있는 추상화를 저수준으로 다시 풀지 않는다는 인지 부하 규칙(루트 CLAUDE.md §4).
 
 ---
 
@@ -237,24 +237,71 @@ public sealed class BattleEngine : IResourceMutator
 
 ### 3.1 자원 UI 만들기
 
-`Battle.unity` 열고 Canvas 아래에 다음을 추가.
+`Battle.unity` 열고 Canvas 아래에 만든다. 최종 계층:
 
-- 빈 UI 오브젝트 `ResourcePanel`
-  - 세로 배치 (Vertical Layout Group 권장. 없으면 손수 정렬)
-  - 자식 2개:
-    - `HpBar` (TMP_Text + Image 게이지 — 빨강)
-    - `ManaBar` (파랑)
-
-각 Bar는 다음 구조:
 ```
-HpBar (RectTransform)
- ├ Label (TMP_Text)        "HP"
- ├ Background (Image)      회색
- │  └ Fill (Image)         Anchor=Left, anchoredPosition.x=0, width를 코드로 조절
- └ ValueText (TMP_Text)    "50 / 50"
+ResourcePanel (RectTransform + Vertical Layout Group)
+ ├ HpBar (RectTransform)
+ │   ├ Label (TMP_Text)        "HP"
+ │   ├ Background (Image)       회색
+ │   │   └ Fill (Image)         빨강 — 이 너비를 코드가 조절
+ │   └ ValueText (TMP_Text)    "50 / 50"
+ └ ManaBar  (HpBar 복제, 라벨 "MP" + Fill 파랑)
 ```
 
-> **HpBar를 Prefab으로 만들고 1번 복제**해 라벨/색만 바꿔 ManaBar로 쓴다. Phase 2 placeholder 수준이라 정교한 UI는 Phase 14에서 다시 함. Phase 3에 기세 게이지가 추가되면 같은 Prefab을 한 번 더 복제.
+#### 먼저 알아둘 개념 4개
+
+| 용어 | 한 줄 설명 |
+|------|-----------|
+| **Canvas** | 모든 UI가 올라가는 판. 씬에 1개 있으면 그 아래에 UI를 넣는다 |
+| **RectTransform** | UI용 Transform. 위치·크기를 **앵커/피벗/sizeDelta**로 잡는다 |
+| **앵커(Anchor)** | 부모 사각형 안에서 어디에 매달릴지. 한 점에 모으면(min=max) 크기가 `sizeDelta`로 **고정**, 벌리면 부모 따라 늘어남 |
+| **피벗(Pivot)** | 자기 크기·회전의 기준점. `x=0`이면 왼쪽 변 기준 → 너비를 늘리면 **오른쪽으로만** 자란다 |
+
+게이지가 "왼쪽 고정 + 오른쪽으로 차오름"이 되려면 **Fill = 좌측 한 점 앵커 + 피벗 x=0**. 이게 §3.2 코드와 맞물리는 핵심 ([아래 "왜 이 앵커여야 하나"](#왜-fill-앵커가-중요한가) 참조).
+
+#### 단계별 절차
+
+1. **ResourcePanel**
+   - Hierarchy `Canvas` 우클릭 → UI → Empty, 이름 `ResourcePanel`.
+   - 앵커 프리셋(Inspector 좌상단 네모) → 화면 top-left. Pos X=20, Y=-20.
+   - `Add Component → Vertical Layout Group` (Spacing 8, Child Alignment Upper Left, Control Child Size 해제).
+2. **HpBar (컨테이너)**
+   - `ResourcePanel` 우클릭 → UI → Empty, 이름 `HpBar`. Width 240, Height 30.
+3. **Label**
+   - `HpBar` 우클릭 → UI → Text - TextMeshPro (첫 사용 시 "Import TMP Essentials" Import).
+   - 이름 `Label`, 내용 `HP`. 앵커 왼쪽-중앙, Width 40.
+4. **Background**
+   - `HpBar` 우클릭 → UI → Image, 이름 `Background`. Color 회색(80,80,80,255).
+   - Width 200, Height 20. Label 오른쪽에 배치.
+   - **이 Background 폭이 게이지 최대 길이.** `ResourceBar`가 이 폭을 `_track.rect.width`로 런타임에 읽으므로 코드와 따로 동기화할 값은 없다 — 폭을 바꾸면 게이지가 자동으로 따라간다.
+5. **Fill (제일 중요)**
+   - `Background` 우클릭 → UI → Image, 이름 `Fill`. Color 빨강.
+   - 앵커 프리셋 **왼쪽-중앙** 클릭 → `anchorMin = anchorMax = (0, 0.5)`.
+   - **Pivot** 직접 입력 `X=0, Y=0.5`.
+   - `Pos X=0, Pos Y=0` (Background 왼쪽 변에 딱 붙음), `Width=200, Height=20`.
+6. **ValueText**
+   - `HpBar` 우클릭 → UI → Text - TextMeshPro, 이름 `ValueText`, 내용 `50 / 50`. Background 위에 겹치거나 오른쪽.
+
+#### 왜 Fill 앵커가 중요한가
+
+§3.2 [ResourceBar.cs](#scriptsbattleviewresourcebarcs)는 `_fill.sizeDelta.x = _track.rect.width * ratio`로 너비를 직접 만진다.
+
+- `sizeDelta`는 "앵커 사각형 대비 크기 차"다. Fill 앵커를 **한 점**(min=max)으로 모으면 앵커 사각형이 0 → `sizeDelta.x`가 **그대로 실제 픽셀 너비**가 된다. 앵커를 좌우로 벌려놓으면(stretch) `sizeDelta.x`는 너비가 아니라 여백이 돼 코드가 안 먹는다.
+- 피벗 `x=0`이라 너비가 줄어도 **왼쪽 변 고정, 오른쪽만 깎임** → 게이지가 오른쪽부터 빈다. 피벗 0.5면 가운데로 줄어든다.
+
+→ **Fill 앵커=(0,0.5) 한 점 / 피벗 x=0 / Pos=(0,0)**. 이 셋이 어긋나면 게이지가 안 움직이거나 엉뚱하게 움직인다 — Phase 2에서 가장 흔히 막히는 지점.
+
+#### Prefab화 + ManaBar 복제
+
+1. `HpBar`를 `Assets/_Project/Prefabs/`로 드래그 → Prefab 생성.
+2. `ResourcePanel` 아래에 Prefab 한 번 더 배치(또는 `HpBar` Ctrl+D).
+3. 복제본 이름 `ManaBar`, `Label` 텍스트 `HP→MP`, `Fill` Color 빨강→파랑.
+4. 이 시점엔 UI만 있다. `ResourceBar` 컴포넌트 부착·슬롯 연결은 §3.2에서 스크립트를 만든 뒤 §3.4에서 한다.
+
+> Phase 2 placeholder 수준이라 정교한 UI는 Phase 14에서 다시 함. Phase 3에 기세 게이지가 추가되면 이 Prefab을 한 번 더 복제(라벨/색만).
+
+> **참고**: Unity Image에 `Image Type=Filled` + `Fill Amount`(0~1) 내장 게이지도 있다. 더 간단해 보이지만 가이드가 `sizeDelta` 방식을 쓰는 이유 — (1) RectTransform 이해에 학습상 도움 (2) Phase 14 정식 UI에서 fill 외 데코(테두리·눈금)를 붙이기 쉬움. 코드가 이미 `sizeDelta`로 쓰여 있으니 앵커만 정확히 잡으면 된다.
 
 ### 3.2 `ResourceBar` MonoBehaviour (작은 헬퍼)
 
@@ -264,7 +311,6 @@ HpBar (RectTransform)
 
 ```csharp
 using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
 
 namespace MurimRunaway.Battle.View
@@ -272,15 +318,15 @@ namespace MurimRunaway.Battle.View
     /// <summary>current/max를 받아 Fill width + 텍스트를 갱신하는 자원 게이지 헬퍼.</summary>
     public sealed class ResourceBar : MonoBehaviour
     {
+        [SerializeField] private RectTransform _track;   // Fill의 부모(Background) — 게이지 최대 폭
         [SerializeField] private RectTransform _fill;
         [SerializeField] private TMP_Text _valueText;
-        [SerializeField] private float _maxWidth = 200f;
 
         public void SetValue(int current, int max)
         {
             var ratio = max <= 0 ? 0f : (float)current / max;
             var size = _fill.sizeDelta;
-            size.x = _maxWidth * ratio;
+            size.x = _track.rect.width * ratio;
             _fill.sizeDelta = size;
 
             if (_valueText != null)
@@ -289,6 +335,8 @@ namespace MurimRunaway.Battle.View
     }
 }
 ```
+
+> `_maxWidth` 상수 대신 `_track.rect.width`를 읽는다 — Background 폭이 유일한 진실의 출처가 되어 수동 동기화가 사라진다. §3.3 `BattleSceneController`가 `_gauge.rect.width`를 쓰는 패턴과 동일. `rect.width`는 레이아웃 이후에만 유효하나 `SetValue`는 스냅샷 시점(레이아웃 이후) 호출이라 안전 — `Awake`에서 캐싱 금지.
 
 ### 3.3 `BattleSceneController` — 자원 표시 연결
 
@@ -324,12 +372,36 @@ public sealed class BattleSceneController : MonoBehaviour
 }
 ```
 
-### 3.4 Inspector 연결
+### 3.4 컴포넌트 부착 + Inspector 연결
+
+§3.2에서 `ResourceBar.cs`를 만들었으니 이제 씬에 붙인다. **연결은 2단** — 먼저 각 Bar가 자기 `ResourceBar`를 갖게 하고(A), 그 다음 `BattleSceneController`가 두 `ResourceBar`를 잡게 한다(B).
+
+#### (A) `ResourceBar` 부착 + 자체 슬롯 — **Prefab에 1회**
+
+`ManaBar`가 `HpBar` Prefab의 인스턴스이므로, Prefab 에셋에 **한 번만** 부착하면 두 Bar가 함께 받는다.
+
+1. Project 창 `HpBar` Prefab 더블클릭 → **Prefab Mode** 진입 (또는 Hierarchy 인스턴스 우클릭 → Prefab → Open).
+2. 루트 `HpBar`에 `Add Component → ResourceBar`.
+3. 슬롯 연결 (Prefab **자신의** 자식을 가리킴):
+   - `_track` ← Prefab의 **Background** 드래그(게이지 최대 폭을 여기서 읽음).
+   - `_fill` ← Prefab의 **Fill** 드래그(RectTransform로 들어감).
+   - `_valueText` ← Prefab의 **ValueText** 드래그.
+4. Prefab Mode 나가기(저장). → HpBar·ManaBar 인스턴스 둘 다 컴포넌트+슬롯 반영.
+
+> **왜 Prefab 슬롯이 인스턴스마다 따로 먹히나**: 같은 Prefab 내부 참조(`HpBar`→`HpBar/Fill`)는 Unity가 인스턴스별로 자동 재해석한다 — ManaBar 인스턴스의 `ResourceBar`는 `ManaBar/Fill`을 알아서 가리킨다. 슬롯을 인스턴스에서 다시 만질 필요 없음.
+>
+> **단, ManaBar가 진짜 Prefab 인스턴스일 때만.** Hierarchy에서 ManaBar 아이콘이 파란 박스(Prefab 인스턴스)인지 확인. §3.1에서 Ctrl+D로 만들어 Prefab 연결이 끊긴 일반 사본이면 ManaBar에 따로 `Add Component → ResourceBar` + 슬롯 수동 연결.
+>
+> 라벨 텍스트("MP")·Fill 색(파랑)은 ManaBar 인스턴스의 **오버라이드**로 둔다 — Prefab 공통값을 인스턴스에서만 덮는 정상 동작.
+
+#### (B) `BattleSceneController` 슬롯 연결
+
+`BattleSceneController` 컴포넌트(§3.3) Inspector에서:
 
 | 슬롯 | 연결할 대상 |
 |------|------------|
-| `_hpBar` | `ResourcePanel/HpBar`에 붙은 `ResourceBar` |
-| `_manaBar` | `ResourcePanel/ManaBar` |
+| `_hpBar` | `ResourcePanel/HpBar`에 붙인 `ResourceBar` |
+| `_manaBar` | `ResourcePanel/ManaBar`에 붙인 `ResourceBar` |
 
 `PlayerStartData` 시작값은 일단 디폴트(`Mana=50/100`) 그대로. SerializeField로 노출할지는 Phase 3에서 Skill 비용 튜닝 시작할 때 결정.
 

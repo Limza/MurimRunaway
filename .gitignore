@@ -108,3 +108,10 @@ InitTestScene*.unity*
 
 # Obsidian vault config (personal editor settings)
 Docs/.obsidian/
+
+# IDE/language-server build cache
+*.csproj.lscache
+
+# Claude Code local-only (per-machine settings + agent worktrees)
+.claude/settings.local.json
+.claude/worktrees/
