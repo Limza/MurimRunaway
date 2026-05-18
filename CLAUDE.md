@@ -4,6 +4,8 @@ AI 어시스턴트와 작업할 때 따르는 프로젝트 전반 규칙. 코드
 
 코드 규칙(YAGNI·아키텍처·명명)은 [Assets/_Project/Scripts/CLAUDE.md](Assets/_Project/Scripts/CLAUDE.md)에 있다. Scripts 폴더에서 작업할 때 자동으로 로드된다.
 
+문서 작성 형식 규칙(콜아웃·폴딩·인지 부하)은 [Docs/CLAUDE.md](Docs/CLAUDE.md)에 있다. Docs 폴더에서 작업할 때 자동으로 로드된다.
+
 ---
 
 ## 1. Phase 진행 규칙

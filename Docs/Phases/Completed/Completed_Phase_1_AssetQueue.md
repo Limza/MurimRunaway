@@ -1,10 +1,10 @@
 # Phase 1 병렬 에셋 작업 큐
 
->
+> [!abstract]- 문서 위상 & 작업 규칙 (한 번 읽고 접기)
 > **본 문서의 위상**
 > - Phase 1 코드 작업과 **동시에 진행**할 에셋 생성 작업의 진행 표.
 > - Phase 1 자체는 에셋 부담 없음 (─). 본 큐의 목적은 **M5/M6/M8 도착 전까지 Track A를 미리 채워두는 것**.
-> - 의존: [MILESTONES.md §3.1 에셋 트랙](../MILESTONES.md), [ASSET_PIPELINE.md](../ASSET_PIPELINE.md).
+> - 의존: [[MILESTONES]] §3.1 에셋 트랙, [[ASSET_PIPELINE]].
 >
 > **작업 규칙**
 > - AI 이미지 생성 대기 시간 동안 코드 작업이 멈추지 않게 한다 — 둘은 **다른 커밋**으로 분리.
@@ -26,7 +26,7 @@
 
 ## 1. 왜 지금 미리 그리는가
 
-[MILESTONES.md §3.1](../MILESTONES.md):
+[[MILESTONES]] §3.1:
 - Track A "전투 아이콘"의 큐잉 시작 시점은 **M3 진입 시점**. Phase 1은 M3보다 앞서지만, 솔로 + AI 생성 환경에서 **2 Phase 앞당겨 시작**해도 손해 없음.
 - 코드 Phase 1은 **S(작은 단위)**라서 한 작업 세션의 텀이 짧음. GPT 이미지 생성/수정은 수 분 단위로 반복되므로, 비는 시간에 시안을 계속 쌓기 좋음.
 - 시안→수정→픽의 사이클이 2~4회 필요하므로 일찍 시작할수록 M5에서 비교 폭이 넓어짐.
@@ -57,7 +57,7 @@
 
 ## 3. Phase 1 동안 큐잉할 항목 (M5 대비 우선)
 
-[MILESTONES.md M5](../MILESTONES.md) + [ASSET_PIPELINE.md §4.1](../ASSET_PIPELINE.md) 기준. **굵게 표시한 5개가 우선순위 상위** — M5 진입 시 가장 먼저 필요.
+[[MILESTONES]] M5 + [[ASSET_PIPELINE]] §4.1 기준. **굵게 표시한 5개가 우선순위 상위** — M5 진입 시 가장 먼저 필요.
 
 ### 3.1 방어 4택 아이콘 (M5) ★ 최우선
 
@@ -438,7 +438,7 @@ Weak:
 
 ## 5. 작업 사이클
 
-1. [ASSET_PIPELINE.md §4](../ASSET_PIPELINE.md)의 GPT 프롬프트 패턴을 베이스로 생성한다.
+1. [[ASSET_PIPELINE]] §4의 GPT 프롬프트 패턴을 베이스로 생성한다.
 2. 시안 2~4장 확보 → 가장 나은 1장을 고른다.
 3. 같은 대화에서 수정 지시를 1~3회 반복한다.
 4. GIMP/Krita에서 배경 통일·크기 정규화·투명화 여부를 정리한다.
@@ -446,14 +446,14 @@ Weak:
 6. 본 문서의 체크박스 갱신 + 시안 카운트(`0/N` → `3/N` 등).
 7. **코드 Phase 1과 별도 커밋**으로 저장한다.
 
->
+> [!note]
 > 픽이 끝난 결정본만 `Assets/_Project/Art/Final/`로 옮긴다 (M5 진입 시점에). `Generated/` 아래는 시안 보관용.
 
 ---
 
 ## 6. 라이선스·도구 메모
 
-- 본 큐의 기본 생성기는 **ChatGPT Images** ([ASSET_PIPELINE.md](../ASSET_PIPELINE.md) §2.1).
+- 본 큐의 기본 생성기는 **ChatGPT Images** ([[ASSET_PIPELINE]] §2.1).
 - 대량 반복 저장이나 자동화가 필요해질 때만 GPT Image API를 검토한다.
 - 모든 결정본 파일은 git에 커밋. `Generated/` 시안은 양이 많아지면 `.gitignore` 여부를 별도 검토.
 

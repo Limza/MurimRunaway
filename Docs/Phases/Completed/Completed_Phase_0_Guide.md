@@ -1,11 +1,11 @@
 # Phase 0 작업 가이드 — Foundation
 
->
+> [!abstract]- 가이드 개요 (한 번 읽고 접기)
 > **목표 한 줄**: 빈 골격이 컴파일되고, EditMode 테스트 2개가 통과하고, Play 시 화면 카운터가 1씩 증가한다.
 >
-> **참조 SSOT**: [BATTLE_DESIGN.md §3 Phase 0](../BATTLE_DESIGN.md) — 본 가이드는 SSOT가 아니라 작업 절차 안내. 사양이 다르면 SSOT 우선.
+> **참조 SSOT**: [[BATTLE_DESIGN]] §3 Phase 0 — 본 가이드는 SSOT가 아니라 작업 절차 안내. 사양이 다르면 SSOT 우선.
 >
-> **함께 보기**: [Phase_0_Learned.md](Phase_0_Learned.md) — 본 Phase에서 사용된 개념 정리.
+> **함께 보기**: [[Completed_Phase_0_Learned]] — 본 Phase에서 사용된 개념 정리.
 >
 
 ---
@@ -20,7 +20,7 @@
 | 작업 브랜치 | `main` 또는 `feature/phase-0`                                       |
 
 
->
+> [!note]
 > Unity 6 기준. 메뉴 명칭이 다른 버전과 다를 수 있음.
 >
 
@@ -42,7 +42,7 @@ Assets/_Project/
 └─ Scenes/
 ```
 
-> 
+> [!note]
 > Unity Editor의 Project 창에서 우클릭 → Create → Folder 로 만들거나, 파일 시스템에서 만들고 Editor를 한 번 포커스(.meta 자동 생성).
 > 
 
@@ -52,7 +52,7 @@ Assets/_Project/
 
 각 폴더에 Assembly Definition 파일을 만든다. **Editor GUI에서**: 폴더 우클릭 → `Create` → `Scripting` ▶ → `Assembly Definition`.
 
-> 
+> [!note]
 > Unity 6에서는 `Scripting` 서브메뉴 안에 있다. 구버전(2022 이하)에서는 `Create` 바로 아래.
 > 
 
@@ -113,7 +113,7 @@ Assets/_Project/
 }
 ```
 
-> 
+> [!note]
 > Test asmdef는 Inspector의 **Test Assemblies** 체크박스를 켜는 게 가장 안전. JSON을 직접 편집하면 위 형태가 된다.
 > 
 > View가 Domain·Engine을 둘 다 참조해도, **Engine은 View를 참조하지 못함** → 의존 방향이 단방향으로 강제된다.
@@ -125,7 +125,7 @@ Assets/_Project/
 
 ## 3. Domain 타입 — Phase 0에서 실제로 쓰이는 것만
 
-> 
+> [!note]
 > **YAGNI**: "나중에 쓸 것 같아서" 미리 만들지 않는다 ([CLAUDE.md §1](../../CLAUDE.md)).
 > 
 > Phase 0에서 실제로 쓰이는 Domain 타입은 `BattleSnapshot` 하나.
@@ -184,7 +184,7 @@ namespace MurimRunaway.Battle.Engine
 }
 ```
 
-> 
+> [!note]
 > Pause/Resume/IsRunning은 Phase 0 호출자가 0이라 뺐다. 실제로 일시정지가 필요한 Phase에서 추가한다 (YAGNI).
 > 
 
@@ -278,7 +278,7 @@ namespace MurimRunaway.Battle.Engine
 }
 ```
 
->
+> [!note]
 > `IBattleEngine` 인터페이스·`Setup(BattleStartData)`·`OnResult`는 Phase 1 이후 필요해지면 추출한다.
 >
 
@@ -470,7 +470,7 @@ namespace MurimRunaway.Battle.Tests
 
 ## 9. 최종 검증 (Acceptance Checklist)
 
-[BATTLE_DESIGN §3 Phase 0 Acceptance](../BATTLE_DESIGN.md):
+[[BATTLE_DESIGN]] §3 Phase 0 Acceptance:
 
 - 폴더/asmdef/네임스페이스 생성, **Console에 컴파일 에러 0**.
 - EditMode `TickServiceTests.PumpTicks_AccumulatesDtCorrectly` 통과.
@@ -486,7 +486,7 @@ git add Assets/_Project Packages/manifest.json
 git commit -m "Phase 0: foundation (asmdefs, tick/rng services, empty engine)"
 ```
 
->
+> [!note]
 > 이미 `Phase_0_Guide.md` / `Phase_0_Learned.md` / `Docs/Phases/` 도 같이 추가되어 있을 것.
 >
 
@@ -503,6 +503,6 @@ git commit -m "Phase 0: foundation (asmdefs, tick/rng services, empty engine)"
 
 ## 12. Phase 0 → Phase 1 진입 조건
 
-위 §9 체크리스트 4개 + 커밋 완료. Phase 1은 [BATTLE_DESIGN §3 Phase 1](../BATTLE_DESIGN.md)에서 Actor와 거리축을 도입한다.
+위 §9 체크리스트 4개 + 커밋 완료. Phase 1은 [[BATTLE_DESIGN]] §3 Phase 1에서 Actor와 거리축을 도입한다.
 
  

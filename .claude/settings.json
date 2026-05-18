@@ -29,7 +29,16 @@
       "Bash(git config *)",
       "Bash(powershell -NoProfile -Command \"Get-Content .gitignore -Tail 12\")",
       "Bash(git commit *)",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:news.hada.io)",
+      "PowerShell($p = \\(Get-Command pandoc -ErrorAction SilentlyContinue\\); if \\($p\\) { \\(pandoc --version | Select-Object -First 1\\) } else { \"pandoc: NO\" }; $py = \\(Get-Command python -ErrorAction SilentlyContinue\\); if \\($py\\) { \\(python --version\\) } else { \"python: NO\" }; $n = \\(Get-Command node -ErrorAction SilentlyContinue\\); if \\($n\\) { \\(node --version\\) } else { \"node: NO\" })",
+      "PowerShell(python -c \"import markdown; print\\('markdown', markdown.__version__\\)\" 2>&1)",
+      "PowerShell(python -c \"import mistune; print\\('mistune', mistune.__version__\\)\" 2>&1)",
+      "PowerShell(python \"c:\\\\Users\\\\rkddl\\\\Desktop\\\\MyWork\\\\MurimRunaway\\\\Docs\\\\_scratch\\\\md2html.py\")",
+      "PowerShell($p=\"c:\\\\Users\\\\rkddl\\\\Desktop\\\\MyWork\\\\MurimRunaway\\\\Docs\\\\_scratch\"; Get-ChildItem $p -Recurse -File | Select-Object -ExpandProperty FullName; Remove-Item $p -Recurse -Force -Confirm:$false; \"deleted: \" + \\(-not \\(Test-Path $p\\)\\))",
+      "Bash(git diff *)",
+      "Bash(git -c color.diff=false diff --unified=0 -- Docs/BATTLE_DESIGN.md)",
+      "Bash(git -c color.diff=false diff -- .claude/settings.json)"
     ],
     "additionalDirectories": [
       "c:\\Users\\rkddl\\Desktop\\MyWork\\MurimRunaway\\Docs"

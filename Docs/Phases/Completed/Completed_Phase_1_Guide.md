@@ -1,11 +1,11 @@
 # Phase 1 작업 가이드 — Actor & 거리축 + 플레이어 진군
 
->
+> [!abstract]- 가이드 개요 (한 번 읽고 접기)
 > **목표 한 줄**: Player 1명·Enemy 1~4명이 1D 거리축에서 시간에 따라 **플레이어가 적 웨이브 쪽으로 진군**하고, 가장 가까운 적의 교전 거리에 닿으면 Resolve(victory)가 송신된다.
 >
-> **참조 SSOT**: [BATTLE_DESIGN.md §3 Phase 1](../BATTLE_DESIGN.md) — 본 가이드는 SSOT가 아니라 작업 절차 안내. 사양이 다르면 SSOT 우선.
+> **참조 SSOT**: [[BATTLE_DESIGN]] §3 Phase 1 — 본 가이드는 SSOT가 아니라 작업 절차 안내. 사양이 다르면 SSOT 우선.
 >
-> **함께 보기**: [Phase_1_Learned.md](Phase_1_Learned.md) — 본 Phase에서 등장한 개념 정리. [Phase_1_AssetQueue.md](Phase_1_AssetQueue.md) — Phase 1 코드 작업과 병렬로 진행할 에셋 큐.
+> **함께 보기**: [[Completed_Phase_1_Learned]] — 본 Phase에서 등장한 개념 정리. [[Completed_Phase_1_AssetQueue]] — Phase 1 코드 작업과 병렬로 진행할 에셋 큐.
 >
 
 ---
@@ -19,7 +19,7 @@
 | `BattleSnapshot` | `TickIndex` 한 필드. 본 Phase에서 `BattleSnapshot`으로 확장 |
 | 작업 브랜치 | `feature/phase-1` 권장 |
 
->
+> [!note]
 > Phase 1은 데미지·스킬·자원이 없다. "시간이 흐르고 플레이어가 적 웨이브에 닿으면 끝"이 전부. Non-goals를 의식하며 YAGNI 유지.
 >
 
@@ -33,8 +33,9 @@
 
 - Phase 1에서 실제 쓰이는 상태는 `Idle` / `Running` / `Dead`. 나머지는 후속 Phase에서 활성화될 자리만 잡아둔다.
 - `Running`은 **플레이어 전용** 상태(적 쪽으로 진군). Enemy는 Phase 1 내내 `Idle` 고정.
-- 후속 상태(`Casting`/`HeavyCharging`/`Stunned`)도 미리 enum에 선언해두는 이유는 [BATTLE_DESIGN §3 Phase 1](../BATTLE_DESIGN.md)에서 enum 정의 자체가 Phase 1 산출물이기 때문. **로직 없이 이름만**.
+- 후속 상태(`Casting`/`HeavyCharging`/`Stunned`)도 미리 enum에 선언해두는 이유는 [[BATTLE_DESIGN]] §3 Phase 1에서 enum 정의 자체가 Phase 1 산출물이기 때문. **로직 없이 이름만**.
 
+> [!note]
 > **진영 표현**: 진영은 enum 대신 `PlayerActor`/`EnemyActor` 타입 분리로 표현한다(§1.2). View가 그릴 때 진영 정보가 필요하면 `ActorView.IsPlayer`(bool) 사용. 진영이 3개 이상으로 늘어나는 시점에 enum 도입 고려.
 
 ### `Scripts/Battle/Domain/Enums/ActorState.cs`
@@ -112,7 +113,7 @@ namespace MurimRunaway.Battle.Domain
 }
 ```
 
->
+> [!note]
 > Phase 2에서 `PlayerActor`가 자원 2종(HP/내공) 컨테이너를 추가로 갖게 된다. 지금은 `MoveSpeed`만. `EnemyActor`도 Phase 3+에서 무공 슬롯·쿨다운 등 전용 필드가 채워진다.
 >
 
@@ -150,7 +151,7 @@ namespace MurimRunaway.Battle.Domain
 }
 ```
 
->
+> [!note]
 > Domain asmdef가 `UnityEngine`을 참조해도 되는 이유: ScriptableObject는 Unity 의존이지만 **데이터 자산**이며 런타임 로직이 없다. Domain의 "룰을 모른다"는 약속을 깨지 않음. 단, Domain의 POCO(`Actor` 등)는 절대 `using UnityEngine` 금지.
 >
 
@@ -203,7 +204,7 @@ namespace MurimRunaway.Battle.Domain
 }
 ```
 
->
+> [!note]
 > `Engage`는 Phase 3에서 활성화된다. 이름만 미리.
 >
 
@@ -443,7 +444,7 @@ namespace MurimRunaway.Battle.Engine
 }
 ```
 
->
+> [!note]
 > **Player/Enemy 도메인 타입 분리**: 양쪽에 공통으로 의미 있는 필드(`AttackRange` 등)는 `Actor` 베이스에 둔다. 한쪽만 의미 있는 필드(`MoveSpeed`는 Player 전용)는 전용 클래스에 둔다. 공용 `Actor`에 한쪽 전용 필드를 섞으면 반대편에서 의미 없는 필드가 된다. 진영 표현도 enum 필드가 아니라 타입 자체가 담당(`is PlayerActor`).
 
 ---
@@ -455,7 +456,7 @@ namespace MurimRunaway.Battle.Engine
 **역할**: 거리 게이지로 액터 위치를 그려본다. Placeholder 수준 — 가로 막대 + 색 사각형.
 
 - TMP 카운터는 그대로 두고 거리 표시는 추가.
-- 본 Phase의 시각화는 **빨간 사각형(적) + 파란 사각형(플레이어)**로 충분. 실에셋은 [Phase_1_AssetQueue.md](Phase_1_AssetQueue.md)에서 미래 Phase용으로 큐잉.
+- 본 Phase의 시각화는 **빨간 사각형(적) + 파란 사각형(플레이어)**로 충분. 실에셋은 [[Completed_Phase_1_AssetQueue]]에서 미래 Phase용으로 큐잉.
 
 ### 3.1 EnemyData 자산 생성
 
@@ -567,6 +568,7 @@ namespace MurimRunaway.Battle.View
 }
 ```
 
+> [!note]
 > 마커 매핑은 `actor.Id`에 의존(player=0, enemy=1부터). Engine [§2.1](#21-battleenginecs-재작성)이 이 규약을 지킨다.
 >
 > `_worldMax`는 SO나 const가 아니라 데이터에서 파생. "가장 먼 적 = 게이지 끝"이 SSOT가 `EnemyData.SpawnPosition`이라는 의미. 전장 길이와 적 위치가 분리되어야 할 때(예: 여유 공간) 별도 필드로 승격.
@@ -639,7 +641,7 @@ namespace MurimRunaway.Battle.Tests
 }
 ```
 
->
+> [!note]
 > `ScriptableObject.CreateInstance`는 EditMode에서 호출 가능. Tests asmdef가 `UnityEngine`을 참조하는지 확인 (자동 참조됨).
 
 ### 4.2 `BattleEngineNearestEnemyTests.cs`
@@ -700,15 +702,17 @@ namespace MurimRunaway.Battle.Tests
 }
 ```
 
+> [!note]
 > 이 케이스가 `FindNearestAliveEnemyIndex`의 진짜 검증. 적 1명 케이스(§4.1)에선 nearest 선택 분기가 안 돌아간다.
 
+> [!note]
 > Phase 1엔 RNG 실제 호출이 없어 결정성 테스트는 별도로 두지 않는다. Phase 3(무공·스킬)에서 `IRngService` 실제 사용이 들어가는 시점부터 추가.
 
 ---
 
 ## 5. 최종 검증 (Acceptance Checklist)
 
-[BATTLE_DESIGN §3 Phase 1 Acceptance](../BATTLE_DESIGN.md):
+[[BATTLE_DESIGN]] §3 Phase 1 Acceptance:
 
 - [ ] Player 1 (runSpeed=5, attackRange=20), Enemy 1 (spawn=100) → 16.0s ± 0.05s 안에 Player Idle 전이 + Resolve(victory) 송신.
 - [ ] Player(attackRange=20) vs Enemy 3명 spawn={60, 80, 100} → 가장 가까운 적(spawn=60)이 사거리 내가 되는 순간 Resolve. Player.position=40으로 클램프, 적 3명은 Idle 유지.
@@ -724,7 +728,7 @@ git add Assets/_Project Docs/Phases/Phase_1_Guide.md Docs/Phases/Phase_1_Learned
 git commit -m "Phase 1: actor & distance axis (1D approach, Resolve, deterministic snapshot)"
 ```
 
-이후 [BATTLE_DESIGN.md §5 변경 이력](../BATTLE_DESIGN.md)에 Phase 1 완료 한 줄 추가.
+이후 [[BATTLE_DESIGN]] §5 변경 이력에 Phase 1 완료 한 줄 추가.
 
 ---
 
@@ -741,4 +745,4 @@ git commit -m "Phase 1: actor & distance axis (1D approach, Resolve, determinist
 
 ## 8. Phase 1 → Phase 2 진입 조건
 
-§5 체크리스트 4개 + 커밋 완료. Phase 2는 [BATTLE_DESIGN §3 Phase 2](../BATTLE_DESIGN.md)에서 자원 2종(HP/내공) 컨테이너와 `IResourceMutator`, VContainer를 도입한다.
+§5 체크리스트 4개 + 커밋 완료. Phase 2는 [[BATTLE_DESIGN]] §3 Phase 2에서 자원 2종(HP/내공) 컨테이너와 `IResourceMutator`, VContainer를 도입한다.

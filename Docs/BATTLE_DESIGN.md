@@ -1,11 +1,12 @@
 # 전투 시스템 명세서 (Battle Design)
 
+> [!abstract]- 문서 위상 & 작성 규칙 (한 번 읽고 접어두기)
 > **본 문서의 위상**
 > - 정식 게임의 **전투 시스템 SSOT**.
 > - 신규 설계 — 현 프로토타입 코드는 참고만, 본 문서의 코드 아키텍처를 따른다.
 > - 본 문서는 **시스템 명세 + 구현 마일스톤** 두 역할을 겸한다. §3 "구현 단계 (Phases)"는 구현 순서대로 정의되며, 각 Phase의 Acceptance를 만족해야 다음 Phase로 진입한다.
-> - [GAME_DESIGN.md](GAME_DESIGN.md)는 게임 비전·스코프·디자인 룰의 출발점이지만, 본 문서가 전투에 한해 정식 SSOT다. 충돌 시 본 문서 우선.
-> - [MILESTONES.md](MILESTONES.md)는 프로토타입 진행 추적용으로 동결.
+> - [[GAME_DESIGN]]는 게임 비전·스코프·디자인 룰의 출발점이지만, 본 문서가 전투에 한해 정식 SSOT다. 충돌 시 본 문서 우선.
+> - [[MILESTONES]]는 프로토타입 진행 추적용으로 동결.
 >
 > **작성 규칙**
 > - 결정된 것만 본문에 적는다. 미결은 §4 (Open Questions)에 모은다 — 본문에는 [OPEN] 마커를 두지 않는다.
@@ -29,7 +30,10 @@
 
 ## 0.5. v4 피벗 (2026-05-11) — 모바일 오토배틀 로그라이트
 
-레퍼런스: **옵시디언 나이트** (ActFirst Games) — 사이드스크롤 오토배틀 + 레벨업 카드 드래프트 + 메타 진행. 1인 개발 적합성 평가 결과 v3(Steam 빌드크래프터) 대비 부담 피크 이동(전투 매트릭스 L → 모바일 UI L) + 백엔드 최소화로 결정.
+레퍼런스: **옵시디언 나이트** (ActFirst Games) — 사이드스크롤 오토배틀 + 레벨업 카드 드래프트 + 메타 진행.
+
+> [!note] 피벗 근거 (왜 v3 → v4)
+> 1인 개발 적합성 평가 결과, v3(Steam 빌드크래프터) 대비 **부담 피크가 이동**(전투 매트릭스 L → 모바일 UI L)하고 **백엔드가 최소화**되어 결정.
 
 **바뀌는 것 (요약)**:
 - **플랫폼**: Steam(PC) → **Android 우선** (iOS는 v1.0 안정 후).
@@ -47,7 +51,7 @@
 - Phase 0~4 본문 — 오토배틀 코어 자체로 살아남음.
 - Phase 9 회피 — 자동전투에서도 시각 피드백 + RNG로 유효.
 
-마일스톤은 [MILESTONES.md](MILESTONES.md) (v4)를 따른다.
+마일스톤은 [[MILESTONES]] (v4)를 따른다.
 
 ---
 
@@ -56,13 +60,17 @@
 ### 1.1 Goals (v4)
 1. **풀 오토배틀**(일반전 자동 시전) + **보스전 한정 수싸움**(강공 방어 4택 / 오의 공격 3택)이 함께 작동하는 전투 루프.
 2. 보스전의 강공·오의는 **정보 기반 결정**(오성 hint) — 운이 결과를 100% 좌우하지 않는다.
-3. 재능(천무지체/카피/대종사)에 따라 **자동 흐름의 모양과 카드 드래프트 가중치가 달라진다**. v4.1: 재능은 런 시작 선택이 아니라 **런 종료 시 확률 각성**으로 캐릭터에 0~3개 누적(동시 작동·가중치 스택). **첫 런 = 재능 0개 = 신참 베이스라인**(균일 가중치) — 재능 의존 메커니즘은 모두 0개 케이스를 default로 가져야 한다.
+3. 재능(천무지체/카피/대종사)에 따라 **자동 흐름의 모양과 카드 드래프트 가중치가 달라진다**.
 4. 코드는 **Domain / Engine / View 3계층 분리** — Domain 단위 테스트 가능.
 5. 모든 RNG는 **시드 기반 결정적** — 같은 입력은 같은 결과 (디버깅·재현성·외부 시연 재현).
 
+> [!info]- 재능 각성 모델 (v4.1 세부 — Goal 3 보충)
+> v4.1: 재능은 런 시작 선택이 아니라 **런 종료 시 확률 각성**으로 캐릭터에 0~3개 누적(동시 작동·가중치 스택).
+> **첫 런 = 재능 0개 = 신참 베이스라인**(균일 가중치) — 재능 의존 메커니즘은 모두 0개 케이스를 default로 가져야 한다.
+
 ### 1.2 Non-goals (전투 시스템 외)
 - 월드맵, 인카운트, 분파 정렬, 결말 분기 — v1.0 범위 외.
-- 비동기 PvP — v4.1 스코프 컷, v1.1+ 보류 ([MILESTONES.md](MILESTONES.md) §5).
+- 비동기 PvP — v4.1 스코프 컷, v1.1+ 보류 ([[MILESTONES]] §5).
 - 사운드, 세이브/로드, 설정 메뉴 — 폴리시 단계.
 - 다국어 **콘텐츠 추가**(영어/일본어 등 실제 번역)는 v1.0 직전. 단 **L10n 인프라**(Unity Localization, NameKey 컨벤션)는 Phase 1부터 적용 — 후반 일괄 변환 비용 회피.
 - PC/Steam 빌드 — v4는 Android 우선, iOS 후속.
@@ -80,12 +88,13 @@
 ## 2. 아키텍처 원칙
 
 ### 2.1 3계층 분리
-```
-[Domain]          POCO + ScriptableObject (값/룰 정의)
-   ▲                    ▲ (인터페이스 계약)
-[Engine]          시간축 진행 + 룰 적용 + RNG
-   ▲                    ▲ (이벤트 송신 / 입력 수신)
-[View]            MonoBehaviour, UI, VFX, Audio (read-only 출력)
+```mermaid
+flowchart TD
+    Domain["[Domain] POCO + ScriptableObject (값/룰 정의)"]
+    Engine["[Engine] 시간축 진행 + 룰 적용 + RNG"]
+    View["[View] MonoBehaviour, UI, VFX, Audio (read-only 출력)"]
+    Engine -->|인터페이스 계약| Domain
+    View -->|이벤트 송신 / 입력 수신| Engine
 ```
 
 | 계층 | 책임 | Unity 의존 | 룰 결정 권한 |
@@ -108,7 +117,8 @@
 | `MurimRunaway.Battle.View` | `Assets/_Project/Scripts/Battle/View/` | `_MurimRunaway.Battle.View.asmdef` (Domain + Engine 참조) |
 | `MurimRunaway.Battle.Tests` | `Assets/_Project/Tests/Battle/` | `_MurimRunaway.Battle.Tests.asmdef` (Domain + Engine 참조, View 참조 금지) |
 
-> 파일명 `_` prefix는 의도적 — Unity Project 창 정렬 시 폴더 상단에 위치시키기 위함. 어셈블리 정의(`name` 필드) 자체는 `MurimRunaway.Battle.*` 그대로.
+> [!note] 파일명 `_` prefix
+> Unity Project 창 정렬 시 폴더 상단에 위치시키기 위함 — 의도적. 어셈블리 정의(`name` 필드) 자체는 `MurimRunaway.Battle.*` 그대로.
 
 ### 2.4 결정성 (Determinism)
 - 엔진 내 모든 RNG는 `IRngService` 한 곳만 통한다.
@@ -128,7 +138,7 @@
 - 한글·공백·대문자 금지 — Sheets/CSV 컬럼 호환.
 - SO → SO 참조는 Phase 1~2까지는 Inspector 직접 참조 OK. Sheets 도입 시점(미정)에 Id resolver 패턴으로 일괄 전환.
 
-> **[리팩토링 트리거] Sheets 이식 시 숫자 PK 추가**
+> [!warning]- [리팩토링 트리거] Sheets 이식 시 숫자 PK 추가 (미래 작업 — 펼쳐 보기)
 > 현재 `Id: string`(snake_case)이 (a) 외래키 타겟 + (b) 코드네임을 겸직. Sheets로 이식하는 시점에 한국 서버 업계 표준에 맞춰 **숫자 PK 컬럼을 추가**한다:
 > - 기존 `Id: string` → `Code: string`으로 rename (의미: 코드네임)
 > - 신규 `Id: int` 추가 (외래키 타겟)
@@ -147,6 +157,7 @@
 
 ## 3. 구현 단계 (Phases)
 
+> [!important]
 > 진행 원칙:
 > 1. 한 Phase가 끝나면 모든 Acceptance 체크 + 컴파일 통과 + Unity 플레이 한 번 + 커밋.
 > 2. EditMode 테스트가 가능한 Acceptance는 반드시 테스트로 작성.
@@ -251,6 +262,7 @@ public interface IBattleEngine
 | playerAttackRange | float | 플레이어 공격 사거리 (디폴트 20.0). 가장 가까운 적과의 거리 ≤ 이 값이면 진군 정지. Phase 8/12에서 재능·카드로 가변 |
 | enemies | EnemyData[] | 등장 적 |
 
+> [!note]
 > **AttackRange는 Actor 공통 속성** — Phase 1엔 Player만 사용, Phase 4+에서 Enemy도 능동 공격 시작 거리로 활용 (같은 필드 의미·다른 소유자).
 
 `BattleSnapshot` (Engine → View):
@@ -322,6 +334,7 @@ public readonly struct ActorView
 
 **Non-goals**: 자원을 소비/회복하는 스킬·룰은 Phase 3 이후. 본 Phase는 자원 컨테이너만.
 
+> [!info]-
 > **스코프 결정 (2026-05-14, v0.4.2)**: 본 Phase에서 **기세(momentum)/오성(wisdom)을 제외**.
 > - **기세**: 단독 자원으로는 의미 없음 — 스킬의 "쌓기/소비" 메커닉과 짝일 때만 자원으로 성립. Phase 3 SkillData 도입과 동반으로 이동 (Phase 3 Data에 포함).
 > - **오성**: per-battle 자원으로 두면 키우기 게임 결에서 의미 잃음(곧 max). **메타 패시브 슬롯(PlayerData, Phase 11+)** 으로 이동 — Phase 7 hint 정확도는 메타 슬롯 값을 읽는 형태로 명세. Phase 11+ 도입 전엔 placeholder fixed 값으로 우회.
@@ -371,6 +384,7 @@ ActorView 확장 (Player 한정):
 
 **Non-goals**: 데미지(Phase 4), 강공/오의 분기(Phase 5/6).
 
+> [!warning]-
 > **[리팩토링 트리거]** 본 Phase 첫 작업으로 `IBattleSystem` 패턴 도입. Phase 1의 BattleEngine.HandleTick에 들어있던 진군·교전 로직을 `MovementSystem`(Player run) + `EngagementSystem`(교전 거리 검사 → Idle 전이)으로 추출하고, 본 Phase의 자동 시전 결정 트리를 `CastingSystem`으로 신설한다. 이유: tick mutation 개념이 1개(Phase 1)에서 2개+(P3)로 늘어나는 첫 시점 — N=2 트리거. BattleEngine은 `IBattleSystem[]`을 순서대로 호출하는 dispatcher로만 남기고, 액터/페이즈 상태는 공유 `BattleContext`에 둔다. 이 분리를 미루면 P5 강공·P6 오의 매트릭스가 모두 BattleEngine 안에 쌓여 god class가 된다.
 
 **Data (추가)**:
@@ -409,6 +423,7 @@ ActorView 확장 (Player 한정):
 | momentum | int | 기세 (오의 자원 스택). 범위 `[0, maxMomentum]`, 디폴트 0 |
 | maxMomentum | int | 최대 기세 스택. 디폴트 10 |
 
+> [!note]
 > **기세 자원은 Phase 2가 아닌 본 Phase에서 도입** (v0.4.2 스코프 컷). `IResourceMutator`에 `GainMomentum(int)`/`SpendMomentum(int)` 메서드 추가. Invariant: `0 ≤ momentum ≤ maxMomentum`, SpendMomentum atomic(부족 시 false + 값 불변). ActorView에 `Momentum`/`MaxMomentum` Player 한정 필드 추가.
 
 **State machine (Actor FSM, 활성화)**:
@@ -436,6 +451,7 @@ ActorView 확장 (Player 한정):
    - skill.effects 적용 (Phase 4에서 정의).
    - `OnSkillCast(actorId, skillId, targetId)` 이벤트 발생.
 
+> [!note]
 > **루프 제약**: 한 Tick에 한 슬롯만 시전 (위 break). 두 스킬 동시 발동 금지. 이는 §6.4 SSOT의 "강공 동시 발동 정책" 결정과 정합.
 
 **Formulas**:
@@ -511,6 +527,7 @@ event Action<int /*casterId*/, string /*skillId*/, int /*targetId*/> OnSkillCast
 finalDamage = baseDamage      // 본 Phase에선 매트릭스/회피/방어/공격 보정 없음
 hp_new      = max(0, hp_old - finalDamage)
 ```
+> [!note]
 > 매트릭스 배율은 Phase 5/6에서 들어옴. 능력치 압도 보정은 §4 Open Question.
 
 **Interfaces (추가)**:
@@ -598,12 +615,11 @@ event Action<int actorId> OnActorDeath;
 | timeoutSec | float | 미선택 시 자동 결정 |
 
 **State machine (추가)**:
-```
-Engage ──(enemy.heavyChargingStart)── HeavyCharging
-                                          │
-                                  (timeout / playerChoice)
-                                          ▼
-                                   ResolveDefense ── Engage 복귀
+```mermaid
+stateDiagram-v2
+    Engage --> HeavyCharging : enemy.heavyChargingStart
+    HeavyCharging --> ResolveDefense : timeout / playerChoice
+    ResolveDefense --> Engage : 복귀
 ```
 - 적 actor.state: Idle → HeavyCharging (차징 동안 일반 공격 중단) → Idle.
 
@@ -620,8 +636,12 @@ Engage ──(enemy.heavyChargingStart)── HeavyCharging
 4. **타임아웃 (시간 초과)**:
    - 사용자가 선택 안 함 → choice = `null`로 간주, 매트릭스의 "타임아웃" 행렬을 적용 (전 패턴 ✗ 판정).
 5. **Engage 복귀**: TickService.Resume. enemy.state = Idle. heavyAttackCooldown = heavyAttackPeriod 재설정.
-6. **동시 강공 정책 (결정)**: MindGameDefense 진행 중 다른 적이 강공 트리거를 만나면 **FIFO 큐**에 적재한다. 큐는 한 번에 하나씩 순차 처리하며, 큐가 빌 때까지 Engage로 복귀하지 않는다. 동시 다중 강공으로 인한 정보 오버로드를 방지하기 위함.
-7. **MindGame 시간 정지 (결정)**: MindGameDefense 페이즈 동안 TickService는 Pause된다. 이는 (a) 사용자 결정의 인지 부담 보장, (b) 결정 외 변수(다른 적의 진군·공격) 차단을 위함. 단, `heavyChargingDuration` 의 timeout 카운트다운은 일시정지된 게임 시간이 아니라 별도 real-time 타이머로 진행한다.
+6. **동시 강공 정책 (결정)**: MindGameDefense 진행 중 다른 적이 강공 트리거를 만나면 **FIFO 큐**에 적재한다. 큐는 한 번에 하나씩 순차 처리하며, 큐가 빌 때까지 Engage로 복귀하지 않는다.
+7. **MindGame 시간 정지 (결정)**: MindGameDefense 페이즈 동안 TickService는 Pause된다. 단, `heavyChargingDuration` 의 timeout 카운트다운은 일시정지된 게임 시간이 아니라 별도 real-time 타이머로 진행한다.
+
+> [!note] #6·#7 결정 근거
+> - 동시 다중 강공으로 인한 정보 오버로드를 방지하기 위함.
+> - (MindGame 시간 정지는) (a) 사용자 결정의 인지 부담 보장, (b) 결정 외 변수(다른 적의 진군·공격) 차단을 위함.
 
 **Formulas — 방어 매트릭스 (SSOT)**:
 
@@ -642,6 +662,7 @@ matchupMultiplier =
 
 finalDamage = round(enemy.heavyAttackDamage × matchupMultiplier × statSurpressionMod)
 ```
+> [!note]
 > `statSurpressionMod`은 §4 Open Question. 본 Phase에선 `1.0`.
 
 **Interfaces (추가)**:
@@ -725,16 +746,12 @@ event Action<DefenseChoice chosen, DefenseMatchup result, int damageDealt, int c
 | timeoutSec | float | 디폴트 5.0 |
 
 **State machine (추가)**:
-```
-Engage ──(player presses Ouui hotkey, momentum ≥ cost)── EnemyTargetSelect
-                                                              │
-                                                       (user clicks enemy)
-                                                              ▼
-                                                       MindGameOffense
-                                                              │
-                                                  (timeout / playerChoice)
-                                                              ▼
-                                                       ResolveOffense ── Engage
+```mermaid
+stateDiagram-v2
+    Engage --> EnemyTargetSelect : player presses Ouui hotkey, momentum ≥ cost
+    EnemyTargetSelect --> MindGameOffense : user clicks enemy
+    MindGameOffense --> ResolveOffense : timeout / playerChoice
+    ResolveOffense --> Engage
 ```
 - 게임 시간 정지 정책은 Phase 5와 동일.
 
@@ -811,6 +828,7 @@ event Action<OuuiPattern chosen, OffenseMatchup result, int damageDealt, int cou
 
 **Non-goals**: 재능별 시작 오성값(Phase 8).
 
+> [!info]-
 > **Wisdom 값 출처 (v0.4.2)**: 오성은 per-battle 자원이 아니라 **메타 패시브 슬롯**(PlayerData, Phase 11+)에서 읽는 영구 stat. Phase 7 진입 시점에 Phase 11+가 미도입이면 placeholder fixed 값(예: 5) 사용. Phase 11+ 도입 후 `PlayerData.metaPassives` 조회로 교체. `PlayerActor`에 wisdom 필드를 두지 않는다.
 
 **Data (추가)**:
@@ -873,6 +891,7 @@ public interface IChoicePoolProvider
 
 ### Phase 8. 재능 3종 (Talents)
 
+> [!info]-
 > **v4.1 (2026-05-14)**: 재능은 런 시작 선택이 아니라 **런 종료 시 확률 각성**으로 캐릭터에 0~3개 누적(동시 작동·가중치 스택). 본 Phase 8은 **재능이 적용된 상태의 효과**(시작값 차별화)만 정의 — 각성 트리거 자체는 Phase 11+에서. **첫 런 = 재능 0개**: 본 Phase의 재능 효과가 전혀 적용되지 않은 균일 베이스라인 (시작값은 [Phase 2 `PlayerStartData`](#phase-2-자원--hp--내공--기세--오성) 디폴트 사용). Phase 8의 모든 메커니즘은 0개 케이스에서 자연 통과해야 한다. 다중 재능 가중치 합산 방식·Pity·캐릭터 단일성은 §4 Open Q (Q-8~Q-10).
 
 **Goal**: 천무지체 / 카피 / 대종사 — startingMomentum, startingWisdom, startingSkillSlots, 재능별 특수 능력 훅을 정의. 본 Phase는 **시작값 차별화**까지만 활성화. 카피의 "적 무공 카피" / 대종사의 "강화 추가 효과"는 Phase 8.x로 후속.
@@ -893,6 +912,7 @@ public interface IChoicePoolProvider
 | startingSkills | SkillData[] | — | 시작 무공 슬롯 |
 | specialBehaviorId | string | "" | 재능 특수 능력 식별자 (Phase 8.1+) |
 
+> [!info]-
 > **`startingWisdom` 제거 (v0.4.2)**: 오성은 메타 패시브 슬롯(Phase 11+)으로 이관. 재능별 wisdom 차별화는 "재능이 메타 패시브 풀에 가하는 가중치"로 표현 (Phase 8/Phase 12 연계, Open Q-18). 본 Phase에선 wisdom 시작값을 다루지 않음.
 
 **3재능 시작값** (SSOT):
@@ -902,6 +922,7 @@ public interface IChoicePoolProvider
 | 카피 (copy)       | 100 | 100 | 0 | 빈 슬롯 많음 (시작 무공 1) |
 | 대종사 (daejongsa)| 100 | 100 | 5 | 강한 오의 1 + 초식 1 |
 
+> [!note]
 > 카피의 "정보 핸디캡" 의도(기존 wisdom=3)는 메타 패시브 풀 가중치로 재현. 카피 재능 보유 시 오성 패시브 슬롯의 강화 확률이 낮아지는 식 — 정확한 수치는 Phase 8/12 연계로 결정 (Open Q-18).
 
 **Behaviors**:
@@ -1028,6 +1049,7 @@ public interface ITelemetrySink
 
 ### Phase 11~14. v4 신규 Phase (개요 — 상세 명세는 진입 시점에)
 
+> [!note]
 > 본 절은 v4 피벗으로 추가된 Phase의 **개요**만 기록한다. 각 Phase의 본격 명세(Data/Behaviors/Invariants/Acceptance)는 해당 Phase 진입 직전에 본 문서에 추가한다 — CLAUDE.md §1 "코드보다 SSOT 먼저" 규칙.
 
 #### Phase 11. 런 구조 (RunSession)
@@ -1078,6 +1100,7 @@ public interface ITelemetrySink
 
 ## 4. 미해결 질문 (Open Questions)
 
+> [!note]
 > 답이 나오면 해당 Phase 본문에 흡수 + §5 변경 이력에 한 줄.
 
 | # | 질문 | 영향 Phase | 결정 필요 시점 |
@@ -1121,11 +1144,13 @@ public interface ITelemetrySink
 | 2026-05-14 | 0.4 | **v4.1 스코프 컷 + 서사 통일** (피벗 아님). (a) **PvP 컷** — Phase 15 stub 제거, §1.2 Non-goals/§0.5 PvP 표기 재프레이밍, §1.1 Goal 5 "외부 시연 재현"으로 정정, MILESTONES §5로 이동. (b) **재능 매커니즘** — 런 시작 선택 → 런 종료 확률 각성, 캐릭터에 0~3개 누적·동시 작동·가중치 스택. 첫 런 = 재능 0개 = 신참 베이스라인. §1.1 Goal 3 + Phase 8 헤더 노트 갱신. (c) **서사 통일** — 카드=무공 습득/메타=수련 누적/각성=깨달음 (narrative 본문은 TOTAL_DESIGN v4 리프레시 시 적용). (d) §4 Open Q에 v4.1 보류 6건 추가(Q-8~Q-13). |
 | 2026-05-14 | 0.4.1 | **카드 시스템 구조 결정** — 하이브리드 이중 풀(계승+휘발). 계승 풀에 무공 4슬롯(액티브 2 + 패시브 2), 슬롯별 1~6장 모션 진화 + 7~17장 1~12성 위력 누산(12성 특별 연출). 휘발 풀은 슬롯 없이 한 런 내 누적, 무공+패시브 둘 다. 단일 클래스=검사, 평타 세로 베기 자동. Phase 12/13 개요 갱신, Open Q-14~Q-18 추가. |
 | 2026-05-14 | 0.4.2 | **Phase 2 스코프 컷 — 기세/오성 제외**. (a) **기세**: 단독 자원으로 의미 부족(쌓기·소비 메커닉과 짝일 때만 성립) → Phase 3 SkillData 도입과 동반 이동(P3 PlayerActor 확장에 momentum/maxMomentum, IResourceMutator에 GainMomentum/SpendMomentum). (b) **오성**: per-battle 자원으로 두면 키우기 게임 결에서 곧 max → 메타 패시브 슬롯(PlayerData, Phase 11+)으로 이관. P7 Wisdom 출처 = 메타 슬롯(Phase 11+ 미도입 시 placeholder), P8 talent 표에서 startingWisdom 제거(카피 정보 핸디캡 의도는 메타 풀 가중치로 재현). Q-3 회복원에서 기세 제거, Phase 2 Acceptance에 VContainer 항목 추가. Phase_2_Guide.md 동시 갱신. |
+| 2026-05-15 | 0.4.3 | **Phase 2 완료** — 자원 2종(HP/내공) 컨테이너 + `IResourceMutator`(SpendMana atomic / GainMana silent clamp) + VContainer DI 도입. Domain 확장(`PlayerActor.Mana`/`MaxMana`, `PlayerStartData` 내공 시작값, `ActorView` Player 한정 `Mana`/`MaxMana` — Enemy는 0) + Engine(`BattleEngine : IResourceMutator`, `Setup` 자원 초기화) + View(`ResourceBar` + Battle 씬 HP/내공 게이지) + `BattleLifetimeScope`(Tick·Rng·Engine 조립을 VContainer로 위임). EditMode 테스트 `ResourceMutatorTests`(SpendMana 부족 시 거절+값 불변 / GainMana maxMana 클램프) 통과. Phase 2 Guide/Learned/AssetQueue → `Completed/Completed_Phase_2_*` 이관. 커밋 `3f018fa`. |
 
 ---
 
 ## 6. Appendix — 누적 통합 모델
 
+> [!note]
 > 이 섹션은 Phase 진행에 따라 갱신된다. 각 Phase 종료 시 그 Phase가 추가/변경한 부분을 반영.
 
 ### 6.1 데이터 모델 통합 (Phase 진행 시 갱신)
@@ -1140,4 +1165,5 @@ public interface ITelemetrySink
 ### 6.4 이벤트 카탈로그
 - (P0): `SnapshotPublished`, `OnResult`.
 
+> [!note]
 > 위 4개 부록은 Phase 1 종료 시점부터 누적 갱신.

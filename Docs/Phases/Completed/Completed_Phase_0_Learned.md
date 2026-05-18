@@ -1,6 +1,7 @@
 # Phase 0 — 배운 기술 / 개념 정리
 
-> Phase 0의 **작업 절차**는 [Phase_0_Guide.md](Phase_0_Guide.md). 본 문서는 그 작업에서 등장한 **개념·용어·설계 결정의 이유**를 정리한다. 학습 노트.
+> [!tip]
+> Phase 0의 **작업 절차**는 [[Completed_Phase_0_Guide]]. 본 문서는 그 작업에서 등장한 **개념·용어·설계 결정의 이유**를 정리한다. 학습 노트.
 
 ---
 
@@ -34,7 +35,7 @@ Domain  ←  Engine  ←  View
 - View는 둘 다 참조 → 화면에 그리고 입력을 받지만, 룰을 결정하지 않음. 단, 이 말이 "Domain을 아예 못 건드린다"는 뜻은 아니다. View가 받는 값은 `BattleSnapshot`, `ActorView` 같은 읽기 전용 스냅샷으로 제한해 수정 권한을 막는다.
 - Tests는 Domain·Engine만 → View 없는 환경에서 빠르게 단위 테스트.
 
-즉, 이 구조에서 asmdef는 **의존 방향**을 강제하고, 스냅샷/읽기 전용 타입은 **데이터 수정 경계**를 강제한다. 이 둘이 함께 있어야 [BATTLE_DESIGN §2.1 3계층 분리](../BATTLE_DESIGN.md)의 의도가 제대로 살아난다.
+즉, 이 구조에서 asmdef는 **의존 방향**을 강제하고, 스냅샷/읽기 전용 타입은 **데이터 수정 경계**를 강제한다. 이 둘이 함께 있어야 [[BATTLE_DESIGN]] §2.1 3계층 분리의 의도가 제대로 살아난다.
 
 **참고**: Unity 공식 문서 — [Assembly Definitions](https://docs.unity3d.com/Manual/assembly-definition-files.html).
 
@@ -62,6 +63,7 @@ ScriptableObject는 **데이터 자산**이다. 코드 안에 적의 HP를 하�
 
 ## 3. 결정적 RNG (Deterministic RNG)
 
+> [!note]
 > **사용자 질문에 대한 답**.
 
 **RNG**는 Random Number Generator(난수 생성기)의 약자.
@@ -86,7 +88,7 @@ b.Next();  // 예: 1387523891  ← 항상 같음
 4. **밸런스 분석** — 같은 시드로 1000번 시뮬레이션 돌려도 같은 결과 → 코드 변경의 영향을 격리해서 측정 가능.
 
 **규칙 (이 프로젝트가 정한 것)**
-- 모든 무작위는 `IRngService` 한 곳만 통과한다 ([BATTLE_DESIGN §2.4](../BATTLE_DESIGN.md)).
+- 모든 무작위는 `IRngService` 한 곳만 통과한다 ([[BATTLE_DESIGN]] §2.4).
 - `UnityEngine.Random`, `System.Random` 직접 호출 금지 — 시드 통제가 안 되기 때문.
 - `Time.deltaTime`도 같은 이유로 금지 (실행 환경에 따라 dt가 달라지면 결정성 깨짐) → `ITickService`가 0.05f 고정값을 흘려보낸다.
 
@@ -156,7 +158,7 @@ public interface ITickService { event Action<float> Ticked; ... }
 - 테스트 구현은 `PumpTicks(100)` 호출로 100번 호출 → 100×0.05=5초 시뮬레이션.
 - MindGame 페이즈 일시정지는 `Pause()` 한 줄로 끝.
 
-이게 [BATTLE_DESIGN §2.4 결정성](../BATTLE_DESIGN.md)의 핵심 도구 중 하나.
+이게 [[BATTLE_DESIGN]] §2.4 결정성의 핵심 도구 중 하나.
 
 ---
 
@@ -169,6 +171,7 @@ public interface ITickService { event Action<float> Ticked; ... }
 
 View가 `BattleSnapshot.actors[i].hp = 0`을 시도해도 컴파일 에러 → 단방향 데이터 흐름이 컴파일러로 강제됨.
 
+> [!note]
 > 단점: 큰 struct는 복사 비용. 그래서 `BattleSnapshot`은 가능한 한 가볍게 유지하고, `ActorView` 배열은 read-only 구조 사본으로.
 
 ---
@@ -218,6 +221,7 @@ OnStateChanged?.Invoke(in _state);   // 복사 0, 박싱 0
 3. **프로파일러 측정값**: 추측이 아니라 빨간불이 켜진 후에 바꾼다.
 
 ### 한 줄 요약
+> [!note]
 > 현재 구조는 도메인 객체가 작은 동안(대략 ~64바이트, 필드 8개 이하) 옳다. 깨지는 신호는 "프레임 레이트가 빠르다"가 아니라 **"struct가 커졌다"** 또는 **"프로파일러에 잡힌다"** 이다.
 
 ### 미래의 본인을 위한 메모

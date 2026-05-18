@@ -1,11 +1,11 @@
 # Phase 2 작업 가이드 — 자원 2종 (HP / 내공) + VContainer 도입
 
->
+> [!abstract]- 가이드 개요 (한 번 읽고 접기)
 > **목표 한 줄**: Player에 내공 자원을 추가하고(HP는 Phase 1에 이미 있음), 모든 자원 변경을 단일 진입점(`IResourceMutator`)으로 통과시킨다. 매 Snapshot이 자원 현재값을 담는다. 추가로 Phase 1까지 `BattleSceneController.Start()`에서 수동 조립하던 의존성(Tick·Rng·Engine)을 VContainer LifetimeScope로 위임한다.
 >
-> **참조 SSOT**: [BATTLE_DESIGN.md §3 Phase 2](../BATTLE_DESIGN.md) + [MILESTONES.md M2](../MILESTONES.md) — 본 가이드는 SSOT가 아니라 작업 절차 안내. 사양이 다르면 SSOT 우선.
+> **참조 SSOT**: [[BATTLE_DESIGN]] §3 Phase 2 + [[MILESTONES]] M2 — 본 가이드는 SSOT가 아니라 작업 절차 안내. 사양이 다르면 SSOT 우선.
 >
-> **함께 보기**: [Phase_2_Learned.md](Phase_2_Learned.md) — 본 Phase에서 등장한 개념 정리. [Phase_2_AssetQueue.md](Phase_2_AssetQueue.md) — Phase 2 코드 작업과 병렬로 진행할 에셋 큐.
+> **함께 보기**: [[Completed_Phase_2_Learned]] — 본 Phase에서 등장한 개념 정리. [[Completed_Phase_2_AssetQueue]] — Phase 2 코드 작업과 병렬로 진행할 에셋 큐.
 >
 > **v0.4.2 스코프 컷**: SSOT가 자원 4종 → 2종으로 줄었다. **기세(momentum)** 는 Phase 3 SkillData 도입과 동반으로 이동(스킬 쌓기·소비 메커닉과 짝이 있어야 의미 있음). **오성(wisdom)** 은 메타 패시브 슬롯(Phase 11+ PlayerData)으로 이관 — per-battle 자원으로 두면 키우기 결에서 곧 max라 의미 잃음.
 >
@@ -22,7 +22,7 @@
 | `BattleSceneController.Start()` | 현재 RngService·Engine을 직접 `new` 중 (수동 조립) |
 | 작업 브랜치 | `feature/phase-2` 권장 |
 
->
+> [!note]
 > Phase 2는 자원 **컨테이너만** 만든다. 자원을 소비/회복하는 룰(SpendMana를 부르는 코드)은 Phase 3 이후. 본 Phase에선 mutator를 노출만 해두고 호출처가 없다.
 >
 
@@ -35,7 +35,7 @@
 **역할**: Player 전용 자원 컨테이너. Enemy에는 추가하지 않는다 (자원은 Player 한정 개념).
 
 - HP는 이미 base `Actor`에 있음 — 본 Phase에선 그대로 둔다. Phase 2는 **내공** 한 종만 새로 더한다.
-- 모든 필드 `int` — 부동소수점 누적 오차 회피. SSOT [BATTLE_DESIGN §3 Phase 2](../BATTLE_DESIGN.md) 표 따름.
+- 모든 필드 `int` — 부동소수점 누적 오차 회피. SSOT [[BATTLE_DESIGN]] §3 Phase 2 표 따름.
 
 ### `Scripts/Battle/Domain/PlayerActor.cs` — 확장
 
@@ -54,6 +54,7 @@ namespace MurimRunaway.Battle.Domain
 }
 ```
 
+> [!note]
 > 필드를 `public`으로 두는 이유: Engine 내부(`IResourceMutator` 구현)가 직접 쓴다. View는 `ActorView` 사본으로 격리되므로 캡슐화는 mutator 규약으로 강제 ([§5 흔한 함정](#7-흔한-함정) 참조).
 
 ### 1.2 `PlayerStartData` — 시작값 추가
@@ -77,6 +78,7 @@ namespace MurimRunaway.Battle.Domain
 }
 ```
 
+> [!note]
 > SSOT는 `mana` 디폴트=50, `maxMana`=100. 시작값과 최댓값을 같은 자료에 두지 않으면 Phase 11+에서 메타 강화(maxMana +10)와 현재값을 별개 축으로 조작하기 어려워진다.
 
 ### 1.3 `ActorView` — Player 한정 내공 필드 추가
@@ -126,6 +128,7 @@ namespace MurimRunaway.Battle.Domain
 }
 ```
 
+> [!note]
 > Enemy를 위한 별도 struct(`EnemyView`)를 만들 수도 있지만, `ActorView[]` 하나로 매 틱 직렬화하는 게 Phase 11(다수 적)에서 단순하다. 자원 필드 2개의 메모리 낭비는 무시할 수준. Phase 3에서 기세 필드가 추가되면 다시 ~16B 늘어나는데, Pool이 도입되면(Phase 11+) 재평가.
 
 ---
@@ -156,6 +159,7 @@ namespace MurimRunaway.Battle.Engine
 }
 ```
 
+> [!note]
 > Phase 3에서 `SpendMomentum`/`GainMomentum`이 같은 인터페이스에 추가됨. Phase 2엔 내공 두 개만 노출.
 
 ### 2.2 `BattleEngine` — `IResourceMutator` 구현 + Setup 자원 초기화
@@ -227,6 +231,7 @@ public sealed class BattleEngine : IResourceMutator
 }
 ```
 
+> [!note]
 > **왜 `Mathf`가 아니라 `System.Math`?** Engine asmdef는 UnityEngine 의존을 끊는다 — `Mathf.Min`/`Mathf.Clamp`는 UnityEngine이라 금지. 반면 `System.Math.Min(int, int)`은 .NET BCL이고 정수 정확 비교라 결정론도 삼항 비교와 동일하므로 안전. min을 손수 삼항으로 풀지 말고 `Math.Min`을 쓴다 — 이미 있는 추상화를 저수준으로 다시 풀지 않는다는 인지 부하 규칙(루트 CLAUDE.md §4).
 
 ---
@@ -299,8 +304,10 @@ ResourcePanel (RectTransform + Vertical Layout Group)
 3. 복제본 이름 `ManaBar`, `Label` 텍스트 `HP→MP`, `Fill` Color 빨강→파랑.
 4. 이 시점엔 UI만 있다. `ResourceBar` 컴포넌트 부착·슬롯 연결은 §3.2에서 스크립트를 만든 뒤 §3.4에서 한다.
 
+> [!note]
 > Phase 2 placeholder 수준이라 정교한 UI는 Phase 14에서 다시 함. Phase 3에 기세 게이지가 추가되면 이 Prefab을 한 번 더 복제(라벨/색만).
 
+> [!note]
 > **참고**: Unity Image에 `Image Type=Filled` + `Fill Amount`(0~1) 내장 게이지도 있다. 더 간단해 보이지만 가이드가 `sizeDelta` 방식을 쓰는 이유 — (1) RectTransform 이해에 학습상 도움 (2) Phase 14 정식 UI에서 fill 외 데코(테두리·눈금)를 붙이기 쉬움. 코드가 이미 `sizeDelta`로 쓰여 있으니 앵커만 정확히 잡으면 된다.
 
 ### 3.2 `ResourceBar` MonoBehaviour (작은 헬퍼)
@@ -336,6 +343,7 @@ namespace MurimRunaway.Battle.View
 }
 ```
 
+> [!note]
 > `_maxWidth` 상수 대신 `_track.rect.width`를 읽는다 — Background 폭이 유일한 진실의 출처가 되어 수동 동기화가 사라진다. §3.3 `BattleSceneController`가 `_gauge.rect.width`를 쓰는 패턴과 동일. `rect.width`는 레이아웃 이후에만 유효하나 `SetValue`는 스냅샷 시점(레이아웃 이후) 호출이라 안전 — `Awake`에서 캐싱 금지.
 
 ### 3.3 `BattleSceneController` — 자원 표시 연결
@@ -388,6 +396,7 @@ public sealed class BattleSceneController : MonoBehaviour
    - `_valueText` ← Prefab의 **ValueText** 드래그.
 4. Prefab Mode 나가기(저장). → HpBar·ManaBar 인스턴스 둘 다 컴포넌트+슬롯 반영.
 
+> [!note]
 > **왜 Prefab 슬롯이 인스턴스마다 따로 먹히나**: 같은 Prefab 내부 참조(`HpBar`→`HpBar/Fill`)는 Unity가 인스턴스별로 자동 재해석한다 — ManaBar 인스턴스의 `ResourceBar`는 `ManaBar/Fill`을 알아서 가리킨다. 슬롯을 인스턴스에서 다시 만질 필요 없음.
 >
 > **단, ManaBar가 진짜 Prefab 인스턴스일 때만.** Hierarchy에서 ManaBar 아이콘이 파란 박스(Prefab 인스턴스)인지 확인. §3.1에서 Ctrl+D로 만들어 Prefab 연결이 끊긴 일반 사본이면 ManaBar에 따로 `Add Component → ResourceBar` + 슬롯 수동 연결.
@@ -420,7 +429,7 @@ Play 누르면:
 
 ### 4.1 왜 지금 도입하는가
 
-Phase 1 종료 시점의 [BattleSceneController.Start()](../../Assets/_Project/Scripts/Battle/View/BattleSceneController.cs)는 `RngService`/`BattleEngine`을 직접 `new`로 조립한다. Phase 2에서 의존성이 늘진 않지만, Phase 3에서 `IBattleSystem` 분리(SSOT [Phase 3 리팩토링 트리거](../BATTLE_DESIGN.md))가 들어오면 한 번에 5~6개 인스턴스를 손수 엮어야 한다. **그 시점에 도입하면 Phase 3 변경 + DI 도입이 한 커밋에 섞여 리뷰가 어려워진다** — 의존성이 4~5개 근방인 본 Phase가 도입 적기.
+Phase 1 종료 시점의 [BattleSceneController.Start()](../../Assets/_Project/Scripts/Battle/View/BattleSceneController.cs)는 `RngService`/`BattleEngine`을 직접 `new`로 조립한다. Phase 2에서 의존성이 늘진 않지만, Phase 3에서 `IBattleSystem` 분리(SSOT [[BATTLE_DESIGN]] Phase 3 리팩토링 트리거)가 들어오면 한 번에 5~6개 인스턴스를 손수 엮어야 한다. **그 시점에 도입하면 Phase 3 변경 + DI 도입이 한 커밋에 섞여 리뷰가 어려워진다** — 의존성이 4~5개 근방인 본 Phase가 도입 적기.
 
 [memory/project_di_container.md] 메모리에도 "Phase 2 시작 시 도입" 명시.
 
@@ -430,6 +439,7 @@ Phase 1 종료 시점의 [BattleSceneController.Start()](../../Assets/_Project/S
 2. 입력: `https://github.com/hadashiA/VContainer.git?path=VContainer/Assets/VContainer#1.18.0` (1.18.0 = 2026-05-15 기준 최신 안정. 설치 시점에 [releases](https://github.com/hadashiA/VContainer/releases)에서 재확인 후 갱신)
 3. asmdef 갱신: `MurimRunaway.Battle.View` asmdef의 `references`에 `VContainer` 추가.
 
+> [!note]
 > VContainer를 고른 이유: Zenject 대비 IL2CPP·AOT 호환 + 코드 생성 없는 reflection 모드 + 학습용 친화적 문서. 모바일 빌드(Android 우선)에 안전.
 
 ### 4.3 LifetimeScope 작성
@@ -530,6 +540,7 @@ public sealed class BattleSceneController : MonoBehaviour
 3. Inspector의 `_tickService` 슬롯에 `UnityTickService` 오브젝트 드래그.
 4. `BattleSceneController` 컴포넌트의 `_tickService` 슬롯 제거(필드 자체 삭제됨).
 
+> [!note]
 > `BattleSceneController`는 `BattleLifetimeScope`와 같은 씬에 있으면 `RegisterComponentInHierarchy` 가 알아서 찾아낸다. EntryPoint 표시는 안 해도 됨 — MonoBehaviour는 자체 Awake에서 `[Inject]` 메서드를 호출받는다.
 
 ---
@@ -601,13 +612,14 @@ namespace MurimRunaway.Battle.Tests
 }
 ```
 
+> [!note]
 > 테스트 메서드명은 한글 시나리오 묘사 — `feedback_test_naming` 메모리 규칙. 클래스명·필드명은 영문.
 
 ---
 
 ## 6. 최종 검증 (Acceptance Checklist)
 
-[BATTLE_DESIGN §3 Phase 2 Acceptance](../BATTLE_DESIGN.md) + M2 추가:
+[[BATTLE_DESIGN]] §3 Phase 2 Acceptance + M2 추가:
 
 - [x] EditMode: SpendMana로 0 미만이 되는 시도가 false 반환 + 값 불변. (§5.1)
 - [x] EditMode: GainMana가 maxMana 초과 시 maxMana로 클램프. (§5.1)
@@ -628,4 +640,4 @@ namespace MurimRunaway.Battle.Tests
 
 ## 8. Phase 2 → Phase 3 진입 조건
 
-§6 체크리스트 4개 + 커밋 완료. Phase 3는 [BATTLE_DESIGN §3 Phase 3](../BATTLE_DESIGN.md) — `SkillData` SO + 자동 시전 결정 트리 + **기세(momentum) 자원 컨테이너 도입**(v0.4.2 스코프 컷으로 P2에서 옮겨옴). **첫 작업으로 `IBattleSystem` 패턴 도입**(SSOT 리팩토링 트리거)이 들어와 `BattleEngine.HandleTick`이 dispatcher로 줄어든다. 본 Phase의 `IResourceMutator`는 그 때 `GainMomentum`/`SpendMomentum`이 추가되며 Skill 효과의 호출처가 된다.
+§6 체크리스트 4개 + 커밋 완료. Phase 3는 [[BATTLE_DESIGN]] §3 Phase 3 — `SkillData` SO + 자동 시전 결정 트리 + **기세(momentum) 자원 컨테이너 도입**(v0.4.2 스코프 컷으로 P2에서 옮겨옴). **첫 작업으로 `IBattleSystem` 패턴 도입**(SSOT 리팩토링 트리거)이 들어와 `BattleEngine.HandleTick`이 dispatcher로 줄어든다. 본 Phase의 `IResourceMutator`는 그 때 `GainMomentum`/`SpendMomentum`이 추가되며 Skill 효과의 호출처가 된다.

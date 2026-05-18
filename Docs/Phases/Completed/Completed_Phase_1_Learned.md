@@ -1,6 +1,7 @@
 # Phase 1 — 배운 기술 / 개념 정리
 
-> Phase 1의 **작업 절차**는 [Phase_1_Guide.md](Phase_1_Guide.md). 본 문서는 그 작업에서 등장한 **개념·용어·설계 결정의 이유**를 정리한다. 학습 노트.
+> [!tip]
+> Phase 1의 **작업 절차**는 [[Completed_Phase_1_Guide]]. 본 문서는 그 작업에서 등장한 **개념·용어·설계 결정의 이유**를 정리한다. 학습 노트.
 
 ---
 
@@ -56,7 +57,7 @@ if (actor.isMoving && !actor.isAttacking && !actor.isStunned && actor.hp > 0) { 
 
 **무림도망자에서의 위치**
 - Actor 상태(이 Phase): 액터 한 명의 행동 모드.
-- Battle 페이즈([BATTLE_DESIGN.md](../BATTLE_DESIGN.md)): 전투 전체 흐름(Setup → Approach → Engage → Resolve).
+- Battle 페이즈([[BATTLE_DESIGN]]): 전투 전체 흐름(Setup → Approach → Engage → Resolve).
 
 둘은 독립이지만 연결됨 — Phase 1에서는 Player가 `Idle`로 전이하는 그 순간 BattlePhase가 `Resolve`로 넘어간다.
 
@@ -104,7 +105,7 @@ _phase = BattlePhase.Resolve;
 ```
 거리가 AttackRange 이하가 된 그 틱에 Player를 **정확히** `nearest.Position - AttackRange` 위치로 스냅한다. 클램프 없이 그냥 멈추기만 하면, 큰 dt가 들어왔을 때 Player가 적 사거리 안쪽으로 살짝 더 들어가서 멈춤 → 같은 시드라도 dt 패턴에 따라 최종 Position이 흔들림 → 결정성 깨짐.
 
->
+> [!note]
 > 그런데 우리는 `ITickService`가 dt를 0.05초 단위로 잘게 쪼개 펌프하므로, 실제론 한 번의 `HandleTick(dt)` 호출의 dt는 항상 0.05f다. 클램프는 안전망 — Tick 정책이 바뀌어도 시뮬레이션은 결정적으로 남는다.
 
 ---
@@ -133,6 +134,7 @@ Phase 0 Learned §9에서 다뤘듯, struct 본체는 매 틱 `new`가 무료에
 ## 6. id 오름차순 직렬화 — 결정성의 디테일
 
 가이드 §1.7:
+> [!quote]
 > `actors`는 id 오름차순 정렬 보장.
 
 실제 [PublishSnapshot](../../Assets/_Project/Scripts/Battle/Engine/BattleEngine.cs)은 `Array.Sort` 같은 정렬 호출이 없다. 그런데도 "id 오름차순"이 성립하는 이유:
@@ -152,6 +154,7 @@ Phase 0 Learned §9에서 다뤘듯, struct 본체는 매 틱 `new`가 무료에
 ## 7. 진군 종료 = 게임 종료의 임시 정의
 
 Phase 1의 Resolve(victory) 조건:
+> [!quote]
 > Player가 가장 가까운 살아있는 적과의 거리가 AttackRange 이하가 되는 순간 `Player.State = Idle` + `BattlePhase = Resolve` 송신 후 종료.
 
 이건 **임시 정의**다. 실제 게임에선:

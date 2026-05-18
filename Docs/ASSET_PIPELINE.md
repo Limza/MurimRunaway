@@ -1,9 +1,10 @@
 # 에셋 파이프라인 (Asset Pipeline) — AI 생성 기준
 
+> [!abstract]- 문서 위상 & 작성 규칙 (한 번 읽고 접어두기)
 > **본 문서의 위상**
 > - 정식 게임의 **AI 에셋 생성 워크플로 + 에셋 카탈로그 SSOT**.
 > - 사용 도구·라이선스·프롬프트 패턴·Unity 임포트 스펙을 한 곳에서 결정.
-> - 의존: [TOTAL_DESIGN.md](TOTAL_DESIGN.md) §9 (아트 디렉션), [MILESTONES.md](MILESTONES.md) (마일스톤별 에셋 진입 시점).
+> - 의존: [[TOTAL_DESIGN]] §9 (아트 디렉션), [[MILESTONES]] (마일스톤별 에셋 진입 시점).
 >
 > **작성 규칙**
 > - 결정된 도구/스펙만 본문. 미결은 §7 [검토 중].
@@ -28,7 +29,7 @@
 2. **상업 라이선스 검증 의무** — Steam 판매 빌드에 들어가는 모든 자산은 상업 사용이 명시된 도구·모델·소스에서만. 모호하면 사용 금지.
 3. **AI 생성 우선, 자작·외주 없음** — 일러스트·아이콘·SFX·BGM 모두 AI. UI 표준 요소는 무료 CC0 키트 픽업 허용.
 4. **무협 톤·색 코드 준수** — TOTAL_DESIGN §9.2 (무공 4분류), §9.3 (분파 5색)을 프롬프트와 후처리에 반영.
-5. **Placeholder는 가능한 한 오래** — 코드 Phase가 막히지 않게. 실에셋 진입 시점은 [MILESTONES.md](MILESTONES.md) §3 참조.
+5. **Placeholder는 가능한 한 오래** — 코드 Phase가 막히지 않게. 실에셋 진입 시점은 [[MILESTONES]] §3 참조.
 6. **수동 생성 기준의 현실적인 일관성 관리** — GPT 이미지는 SD식 시드 재현성보다 기준 이미지 재사용·동일 세션 작업·짧은 수정 루프가 더 중요하다.
 
 ---
@@ -244,22 +245,16 @@ no text, no characters facing camera, no watermark
 
 ## 6. 의사결정 트리 (새 에셋 필요할 때)
 
-```text
-새 에셋 필요
-   │
-   ├─ UI 표준 요소? ─ Kenney.nl 픽업 → 색만 변경 (90% 케이스)
-   │
-   ├─ 아이콘/포트레이트/결말 시안? ─ ChatGPT Images에서 먼저 생성
-   │
-   ├─ 같은 톤으로 후속 수정 필요? ─ 같은 대화에서 기준 이미지 유지하며 수정
-   │
-   ├─ 수십 장 반복 생성/자동 저장 필요? ─ GPT Image API 검토
-   │
-   ├─ GPT 수동 작업이 병목? ─ Leonardo.Ai / FLUX API 재검토
-   │
-   ├─ SFX? ─ Pixabay 픽업 → 없으면 ElevenLabs SFX Pro
-   │
-   └─ BGM? ─ Pixabay 픽업 → 출시 직전 부족하면 Suno Pro 검토
+```mermaid
+flowchart TD
+    R["새 에셋 필요"]
+    R --> A["UI 표준 요소? ─ Kenney.nl 픽업 → 색만 변경 (90% 케이스)"]
+    R --> B["아이콘/포트레이트/결말 시안? ─ ChatGPT Images에서 먼저 생성"]
+    R --> C["같은 톤으로 후속 수정 필요? ─ 같은 대화에서 기준 이미지 유지하며 수정"]
+    R --> D["수십 장 반복 생성/자동 저장 필요? ─ GPT Image API 검토"]
+    R --> E["GPT 수동 작업이 병목? ─ Leonardo.Ai / FLUX API 재검토"]
+    R --> F["SFX? ─ Pixabay 픽업 → 없으면 ElevenLabs SFX Pro"]
+    R --> G["BGM? ─ Pixabay 픽업 → 출시 직전 부족하면 Suno Pro 검토"]
 ```
 
 ---

@@ -1,11 +1,11 @@
 # Phase 2 병렬 에셋 작업 큐
 
->
+> [!abstract]- 문서 위상 & 작업 규칙 (한 번 읽고 접기)
 > **본 문서의 위상**
 > - Phase 2 코드 작업과 **동시에 진행**할 에셋 작업의 진행 표.
 > - Phase 2 자체는 에셋 부담 없음 (─). 본 큐의 목적은 **M5/M6/M8 도착 전까지 Track A를 정리해두는 것**.
-> - [Phase_1_AssetQueue.md](Phase_1_AssetQueue.md)의 진행 상태를 이어받아 최신 상태만 갱신한다.
-> - 의존: [MILESTONES.md §3.1 에셋 트랙](../MILESTONES.md), [ASSET_PIPELINE.md](../ASSET_PIPELINE.md).
+> - [[Completed_Phase_1_AssetQueue]]의 진행 상태를 이어받아 최신 상태만 갱신한다.
+> - 의존: [[MILESTONES]] §3.1 에셋 트랙, [[ASSET_PIPELINE]].
 >
 > **작업 규칙**
 > - 코드 커밋과 에셋 커밋은 분리한다.
@@ -28,7 +28,7 @@
 
 ## 1. Phase 1에서 이월된 진행 상태
 
-[Phase_1_AssetQueue.md §7](Phase_1_AssetQueue.md) 기준. 완료된 항목은 유지하고, 남은 항목만 Phase 2 동안 이어서 관리한다.
+[[Completed_Phase_1_AssetQueue]] §7 기준. 완료된 항목은 유지하고, 남은 항목만 Phase 2 동안 이어서 관리한다.
 
 | 카테고리 | 항목 수 | Phase 1 종료 시 | Phase 2 기준 상태 |
 |----------|---------|----------------|-------------------|
@@ -73,9 +73,9 @@ Phase 1 이후 기준으로, Track A에서 **새로 생성해야 할 필수 이�
 
 ## 3. 작업 사이클
 
-[Phase_1_AssetQueue.md §5](Phase_1_AssetQueue.md)와 동일.
+[[Completed_Phase_1_AssetQueue]] §5와 동일.
 
-1. 새로운 Track A 에셋 요청이 생기면 [ASSET_PIPELINE.md §4](../ASSET_PIPELINE.md) 기준으로 시안 생성.
+1. 새로운 Track A 에셋 요청이 생기면 [[ASSET_PIPELINE]] §4 기준으로 시안 생성.
 2. 시안 2~4장 확보 후 가장 나은 1장을 고른다.
 3. 같은 대화에서 수정 지시를 1~3회 반복한다.
 4. GIMP/Krita에서 배경 통일, 크기 정규화, 투명화 여부를 정리한다.

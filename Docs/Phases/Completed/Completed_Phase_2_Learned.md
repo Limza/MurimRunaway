@@ -1,6 +1,7 @@
 # Phase 2 — 배운 기술 / 개념 정리
 
-> Phase 2의 **작업 절차**는 [Phase_2_Guide.md](Phase_2_Guide.md). 본 문서는 그 작업에서 등장한 **개념·용어·설계 결정의 이유**를 정리한다. 학습 노트.
+> [!tip]
+> Phase 2의 **작업 절차**는 [[Completed_Phase_2_Guide]]. 본 문서는 그 작업에서 등장한 **개념·용어·설계 결정의 이유**를 정리한다. 학습 노트.
 
 ---
 
@@ -67,7 +68,8 @@ if (mutator.SpendMana(skill.ManaCost))
 
 ## 4. Snapshot 일관성 — 즉시 이벤트가 아니라 다음 스냅샷
 
-SSOT [BATTLE_DESIGN §3 Phase 2](../BATTLE_DESIGN.md) Behavior 3:
+SSOT [[BATTLE_DESIGN]] §3 Phase 2 Behavior 3:
+> [!quote]
 > 자원이 변경되면 Snapshot의 **다음 발행**에 반영 (즉시 이벤트 X — Snapshot 일관성 우선).
 
 대안 — 자원 변경마다 즉시 `OnManaChanged` 이벤트를 쏘는 것도 가능. 그런데 한 Tick 안에서 자원이 3번 바뀌면 View가 3번 갱신되고, 그 사이 중간 상태가 화면에 잠깐 보일 수 있다. **결정론 시뮬레이션은 한 Tick = 한 외부 관측**이 일관성을 가장 단순하게 만든다.
@@ -83,7 +85,7 @@ SSOT [BATTLE_DESIGN §3 Phase 2](../BATTLE_DESIGN.md) Behavior 3:
 
 ## 5. `ActorView`에 한쪽 전용 필드를 두는 비대칭
 
-Phase 1의 [§1.6 ActorView](Phase_1_Guide.md)는 Player/Enemy가 같은 struct를 공유했다. Phase 2에서 Mana/MaxMana 2필드가 Player 한정으로 추가되면서 Enemy 케이스에선 0으로 떨어진다.
+Phase 1의 [[Completed_Phase_1_Guide]] §1.6 ActorView는 Player/Enemy가 같은 struct를 공유했다. Phase 2에서 Mana/MaxMana 2필드가 Player 한정으로 추가되면서 Enemy 케이스에선 0으로 떨어진다.
 
 **왜 EnemyView를 따로 만들지 않았는가**:
 1. View 측 코드가 단일 `ActorView[]`만 순회하면 단순. 두 종류면 `if (player) playerView else enemyView` 같은 분기가 매번 생긴다.
@@ -106,7 +108,7 @@ Phase 1의 [§1.6 ActorView](Phase_1_Guide.md)는 Player/Enemy가 같은 struct�
 
 **도입 안 했을 미래** — Phase 11(런 구조)에선 `RunSession`/`StageRunner`/`BattleEngine`이 동시에 살아있고, 한 런 안에서 BattleEngine만 재생성·교체된다. 컨테이너 없이는 scope 관리가 손수 어려워짐.
 
->
+> [!note]
 > Zenject가 아니라 **VContainer**를 고른 이유: IL2CPP·AOT 호환이 더 매끄럽고, reflection 기반 모드가 학습용으로 단순. 코드 생성(`InstallerCodeGen`) 없이도 기본 동작.
 
 ### 6.1 `Configure` 등록 문법 한 줄씩
@@ -131,6 +133,7 @@ builder.RegisterComponentInHierarchy<BattleSceneController>();
 - `RegisterComponent*` 계열 = "이미 존재하는 MonoBehaviour를 가리켜라" (컨테이너가 안 만듦).
 - `Register<I, Impl>` = "POCO를 컨테이너가 new 해라". `.AsSelf().As<X>()` 체인은 *같은 인스턴스를 여러 타입으로* 노출하는 별칭.
 
+> [!warning]
 > **함정 — `.AsSelf()`는 왜 redundant가 아닌가**
 > `Register<BattleEngine>()` 단독이면 BattleEngine으로 자동 resolvable이라 `.AsSelf()`가 필요 없다. 하지만 **`.As<T>()`를 하나라도 체인하는 순간 VContainer는 암묵적 self 등록을 취소**한다 → 그 인스턴스는 `T`로만 resolvable. 그래서 `BattleEngine`·`IResourceMutator` 양쪽으로 받아야 하는 우리 경우, `.AsSelf()`는 `.As<>()`가 꺼버린 self 등록을 **되살리는** 필수 호출이다. (`.As<>()` 없으면 self 자동 → `.AsSelf()` 불필요 / `.As<>()` 있으면 self 취소 → `.AsSelf()` 필수)
 
@@ -144,7 +147,7 @@ builder.RegisterComponentInHierarchy<BattleSceneController>();
 - SO는 **에셋 파일**. 런타임에 필드를 변경하면 에디터에선 디스크에 반영된다 (Play 모드 종료 후에도 남음).
 - Phase 2 학습 노트의 핵심 — **런타임 가변 값은 절대 SO에 두지 않는다**. 시작값(maxMana의 디폴트=100)은 `PlayerStartData`(POCO) 또는 향후 메타 강화 SO의 baseline 필드로.
 
-이건 [Phase_1_Learned.md §3](Phase_1_Learned.md)에서 EnemyData를 직접 mutate하지 않고 EnemyActor로 복사한 것과 같은 원리. **"읽기 전용 데이터" vs "런타임 상태"의 분리**.
+이건 [[Completed_Phase_1_Learned]] §3에서 EnemyData를 직접 mutate하지 않고 EnemyActor로 복사한 것과 같은 원리. **"읽기 전용 데이터" vs "런타임 상태"의 분리**.
 
 ---
 
