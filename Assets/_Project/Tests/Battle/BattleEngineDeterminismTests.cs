@@ -39,7 +39,14 @@ namespace MurimRunaway.Battle.Tests
             engine.Setup(new BattleStartData
             {
                 Seed = seed,
-                Player = new PlayerStartData { MaxHp = 50, MoveSpeed = 5f, AttackRange = 20f },
+                Player = new PlayerStartData
+                {
+                    MaxHp = 50,
+                    MaxMana = 100,
+                    StartingMana = 50,
+                    MoveSpeed = 5f,
+                    AttackRange = 20f,
+                },
                 Enemies = new[] { enemy }
             });
             tick.PumpTicks(400);

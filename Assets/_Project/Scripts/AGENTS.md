@@ -1,6 +1,6 @@
-# Scripts/CLAUDE.md — 코드 규칙
+﻿# Scripts/AGENTS.md — 코드 규칙
 
-`Assets/_Project/Scripts/` 하위 C# 코드에 적용되는 규칙. 프로젝트 전반 규칙은 루트 [CLAUDE.md](../../../CLAUDE.md) 참조.
+`Assets/_Project/Scripts/` 하위 C# 코드에 적용되는 규칙. 프로젝트 전반 규칙은 루트 [AGENTS.md](../../../AGENTS.md) 참조.
 
 ---
 
@@ -57,10 +57,10 @@ SSOT는 [Docs/BATTLE_DESIGN.md](../../../Docs/BATTLE_DESIGN.md). 전투 시스�
       return;
   ```
 - **조건·표현식이 길어지면** `&&`/`||`/`?.` 앞에서 줄을 끊어 들여쓰기로 정렬한다. 한 줄에 연산자 3개 이상 엉기지 않게.
-- **튜플·중첩 인덱싱은 루프 진입 직후 분해.** `var (item, weight) = pool[index];` 같은 한 줄로 청크화 (루트 CLAUDE.md §4 처리 과부하).
+- **튜플·중첩 인덱싱은 루프 진입 직후 분해.** `var (item, weight) = pool[index];` 같은 한 줄로 청크화 (루트 AGENTS.md §4 처리 과부하).
 
 ### 문서 산문 (Docs/**/*.md)
 
 - **문장 단위로 개행.** 마침표·물음표·`—` 등 문장 끝마다 줄바꿈을 적극 고려. 한 줄에 4문장 이상 몰리면 무조건 쪼갠다.
 - **콜아웃(`> [!note]` 등) 내부도 동일.** 근거 / 결론 / 보충 문단 사이에는 빈 `>` 줄로 단락을 나눈다.
-- **핵심은 폴딩으로 숨기지 않는다** (Docs/CLAUDE.md §2).
+- **핵심은 폴딩으로 숨기지 않는다** (Docs/AGENTS.md §2).

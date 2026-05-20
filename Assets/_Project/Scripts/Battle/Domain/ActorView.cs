@@ -9,6 +9,9 @@ namespace MurimRunaway.Battle.Domain
         public readonly int MaxHp;
         public readonly int Mana;
         public readonly int MaxMana;
+        public readonly int Momentum;
+        public readonly int MaxMomentum;
+        public readonly SkillSlotView[] Skills;
         public readonly float Position;
         public readonly ActorState State;
 
@@ -25,12 +28,26 @@ namespace MurimRunaway.Battle.Domain
             {
                 Mana = player.Mana;
                 MaxMana = player.MaxMana;
+                Momentum = player.Momentum;
+                MaxMomentum = player.MaxMomentum;
+                Skills = ToSlotViews(player.Skills);
             }
             else
             {
                 Mana = 0;
                 MaxMana = 0;
+                Momentum = 0;
+                MaxMomentum = 0;
+                Skills = System.Array.Empty<SkillSlotView>();
             }
+        }
+
+        private static SkillSlotView[] ToSlotViews(SkillSlot[] slots)
+        {
+            var views = new SkillSlotView[slots.Length];
+            for (var index = 0; index < slots.Length; index++)
+                views[index] = new SkillSlotView(slots[index]);
+            return views;
         }
     }
 }

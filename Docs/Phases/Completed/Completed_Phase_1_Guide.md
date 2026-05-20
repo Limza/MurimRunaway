@@ -43,14 +43,15 @@
 ```csharp
 namespace MurimRunaway.Battle.Domain
 {
-    /// <summary>Actor FSM. Phase 1에서 활성: Idle, Running, Dead. 나머지는 후속 Phase 자리.</summary>
+    /// <summary>Actor FSM.</summary>
     public enum ActorState
     {
+        None = 0,
         Idle,
-        Running,      // Player 진군 (Phase 1)
-        Casting,        // Phase 3
-        HeavyCharging,  // Phase 5
-        Stunned,        // Phase 5
+        Running,      // Player 진군
+        Casting,
+        HeavyCharging,
+        Stunned,
         Dead
     }
 }
@@ -80,7 +81,7 @@ namespace MurimRunaway.Battle.Domain
         public float Position;
         public ActorState State;
         public string SourceId;
-        /// <summary>공격 사거리. Phase 1엔 Player만 사용(진군 정지 거리). Phase 4+에 Enemy도 능동 공격 시작 거리로 활용.</summary>
+        /// <summary>공격 사거리.</summary>
         public float AttackRange;
 
         public ActorView ToView() => new(this);
@@ -106,7 +107,7 @@ namespace MurimRunaway.Battle.Domain
 ```csharp
 namespace MurimRunaway.Battle.Domain
 {
-    /// <summary>적 액터. spawnPosition에 고정 배치된다. Phase 1엔 전용 필드 없음.</summary>
+    /// <summary>적 액터. spawnPosition에 고정 배치된다.</summary>
     public sealed class EnemyActor : Actor
     {
     }
@@ -181,12 +182,12 @@ namespace MurimRunaway.Battle.Domain
 ```csharp
 namespace MurimRunaway.Battle.Domain
 {
-    /// <summary>한 전투에 들어갈 때의 Player 시작값. 영구 PlayerData(Phase 11+)와 별개.</summary>
+    /// <summary>한 전투에 들어갈 때의 Player 시작값.</summary>
     public sealed class PlayerStartData
     {
         public int MaxHp;
-        public float MoveSpeed = 5f; // dist/s. Phase 9 경공이 일시 부스트.
-        public float AttackRange = 20f; // 가장 가까운 적과의 거리 ≤ 이 값이면 진군 정지. Phase 8/12에서 재능·카드로 가변.
+        public float MoveSpeed;
+        public float AttackRange;
     }
 }
 ```
@@ -200,7 +201,7 @@ namespace MurimRunaway.Battle.Domain
 ```csharp
 namespace MurimRunaway.Battle.Domain
 {
-    public enum BattlePhase { Setup, Approach, Engage, Resolve }
+    public enum BattlePhase { None = 0, Setup, Approach, Engage, Resolve }
 }
 ```
 
@@ -295,7 +296,7 @@ using MurimRunaway.Battle.Domain;
 
 namespace MurimRunaway.Battle.Engine
 {
-    /// <summary>전투 시뮬레이션 본체. Phase 1: 플레이어 진군과 Resolve(victory) 흐름.</summary>
+    /// <summary>전투 시뮬레이션 본체.</summary>
     public sealed class BattleEngine
     {
         private readonly ITickService _tick;
@@ -521,6 +522,7 @@ namespace MurimRunaway.Battle.View
         [SerializeField] private int _seed = 1;
         [SerializeField] private int _playerMaxHp = 50;
         [SerializeField] private float _playerMoveSpeed = 5f;
+        [SerializeField] private float _playerAttackRange = 20f;
         [SerializeField] private EnemyData[] _enemyDatas;
 
         private BattleEngine _engine;
@@ -542,7 +544,12 @@ namespace MurimRunaway.Battle.View
             _engine.Setup(new BattleStartData
             {
                 Seed = _seed,
-                Player = new PlayerStartData { MaxHp = _playerMaxHp, MoveSpeed = _playerMoveSpeed },
+                Player = new PlayerStartData
+                {
+                    MaxHp = _playerMaxHp,
+                    MoveSpeed = _playerMoveSpeed,
+                    AttackRange = _playerAttackRange,
+                },
                 Enemies = _enemyDatas,
             });
             _engine.Start();

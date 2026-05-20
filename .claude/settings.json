@@ -38,7 +38,15 @@
       "PowerShell($p=\"c:\\\\Users\\\\rkddl\\\\Desktop\\\\MyWork\\\\MurimRunaway\\\\Docs\\\\_scratch\"; Get-ChildItem $p -Recurse -File | Select-Object -ExpandProperty FullName; Remove-Item $p -Recurse -Force -Confirm:$false; \"deleted: \" + \\(-not \\(Test-Path $p\\)\\))",
       "Bash(git diff *)",
       "Bash(git -c color.diff=false diff --unified=0 -- Docs/BATTLE_DESIGN.md)",
-      "Bash(git -c color.diff=false diff -- .claude/settings.json)"
+      "Bash(git -c color.diff=false diff -- .claude/settings.json)",
+      "Bash(awk 'length > 200 {print NR\": \"length\" chars\"}' \"c:/Users/rkddl/Desktop/MyWork/MurimRunaway/Docs/Phases/Phase_3_Guide.md\")",
+      "Bash(awk 'length > 200 {n=gsub\\(/다\\\\./,\"&\"\\); if \\(n >= 2\\) print NR\" [\"n\" sentences]: \"substr\\($0,1,80\\)\"...\"}' \"c:/Users/rkddl/Desktop/MyWork/MurimRunaway/Docs/Phases/Phase_3_Guide.md\")",
+      "Bash(awk 'length > 200 && !/^\\\\|/ && !/^```/ {n=gsub\\(/[다요음]\\\\. /,\"&\"\\)+gsub\\(/\\\\. \\\\*\\\\*/,\"&\"\\)+gsub\\(/\\\\.\\\\\\)/,\"&\"\\); if \\(n >= 2\\) print NR\" [\"n\"]\"}' \"c:/Users/rkddl/Desktop/MyWork/MurimRunaway/Docs/Phases/Phase_3_Guide.md\")",
+      "Bash(awk 'length > 200 && !/^\\\\|/ {n=gsub\\(/다\\\\./,\"\"\\); if \\(n >= 2\\) print NR\" [\"n\"]\"}' \"c:/Users/rkddl/Desktop/MyWork/MurimRunaway/Docs/Phases/Phase_3_Guide.md\")",
+      "Bash(awk 'length > 250 && !/^\\\\|/' \"c:/Users/rkddl/Desktop/MyWork/MurimRunaway/Docs/Phases/Phase_3_Guide.md\")",
+      "Bash(awk 'length > 250 && !/^\\\\|/ && !/^```/' \"c:/Users/rkddl/Desktop/MyWork/MurimRunaway/Docs/Phases/Phase_3_Guide.md\")",
+      "Bash(awk 'length > 180 && !/^\\\\|/ && !/^```/ {n=gsub\\(/다\\\\./,\"\"\\); if \\(n >= 2\\) print NR\": \"$0}' \"c:/Users/rkddl/Desktop/MyWork/MurimRunaway/Docs/Phases/Phase_3_Guide.md\")",
+      "Bash(awk 'length > 150 && !/^\\\\|/ && !/^```/ && !/^#/ { *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\rkddl\\Desktop\\MyWork\\MurimRunaway\\Docs"

@@ -47,7 +47,7 @@ namespace MurimRunaway.Battle.Domain
     {
         public float MoveSpeed;
 
-        // 내공 — Phase 2 추가. 변경은 IResourceMutator만 통과 ([§2.1](#21-iresourcemutator)).
+        // 내공. 변경은 IResourceMutator만 통과 ([§2.1](#21-iresourcemutator)).
         public int Mana;
         public int MaxMana;
     }
@@ -64,22 +64,23 @@ namespace MurimRunaway.Battle.Domain
 ```csharp
 namespace MurimRunaway.Battle.Domain
 {
-    /// <summary>한 전투에 들어갈 때의 Player 시작값. 영구 PlayerData(Phase 11+)와 별개.</summary>
+    /// <summary>한 전투에 들어갈 때의 Player 시작값.</summary>
     public sealed class PlayerStartData
     {
         public int MaxHp;
-        public float MoveSpeed = 5f;
-        public float AttackRange = 20f;
+        public float MoveSpeed;
+        public float AttackRange;
 
-        // 내공 시작값 — SSOT 표의 디폴트 따름
-        public int MaxMana = 100;
-        public int StartingMana = 50;
+        public int MaxMana;
+        public int StartingMana;
     }
 }
 ```
 
 > [!note]
-> SSOT는 `mana` 디폴트=50, `maxMana`=100. 시작값과 최댓값을 같은 자료에 두지 않으면 Phase 11+에서 메타 강화(maxMana +10)와 현재값을 별개 축으로 조작하기 어려워진다.
+> `PlayerStartData`는 한 전투에 들어갈 때 이미 정해진 값을 담는다.
+> 기본값은 씬 입력, 테스트 헬퍼, 나중의 Config 빌더가 정한다.
+> 시작값과 최댓값을 같은 자료에 두지 않으면 Phase 11+에서 메타 강화(maxMana +10)와 현재값을 별개 축으로 조작하기 어려워진다.
 
 ### 1.3 `ActorView` — Player 한정 내공 필드 추가
 
@@ -195,7 +196,7 @@ public sealed class BattleEngine : IResourceMutator
             State = ActorState.Running,
             SourceId = "player",
 
-            // Phase 2 추가
+            // 자원 표시 연결
             Mana = data.Player.StartingMana,
             MaxMana = data.Player.MaxMana,
         };
@@ -412,7 +413,8 @@ public sealed class BattleSceneController : MonoBehaviour
 | `_hpBar` | `ResourcePanel/HpBar`에 붙인 `ResourceBar` |
 | `_manaBar` | `ResourcePanel/ManaBar`에 붙인 `ResourceBar` |
 
-`PlayerStartData` 시작값은 일단 디폴트(`Mana=50/100`) 그대로. SerializeField로 노출할지는 Phase 3에서 Skill 비용 튜닝 시작할 때 결정.
+`PlayerStartData` 시작값은 씬 입력이나 테스트 헬퍼에서 명시한다.
+나중에는 Config 빌더가 같은 값을 만들어 넘긴다.
 
 ### 3.5 Play 확인
 
@@ -492,7 +494,10 @@ public sealed class BattleSceneController : MonoBehaviour
 
     [SerializeField] private int _seed = 1;
     [SerializeField] private int _playerMaxHp = 50;
+    [SerializeField] private int _playerMaxMana = 100;
+    [SerializeField] private int _playerStartingMana = 50;
     [SerializeField] private float _playerMoveSpeed = 10f;
+    [SerializeField] private float _playerAttackRange = 20f;
     [SerializeField] private EnemyData[] _enemyDatas;
 
     private BattleEngine _engine;
@@ -518,7 +523,14 @@ public sealed class BattleSceneController : MonoBehaviour
         _engine.Setup(new BattleStartData
         {
             Seed = _seed,
-            Player = new PlayerStartData { MaxHp = _playerMaxHp, MoveSpeed = _playerMoveSpeed },
+            Player = new PlayerStartData
+            {
+                MaxHp = _playerMaxHp,
+                MaxMana = _playerMaxMana,
+                StartingMana = _playerStartingMana,
+                MoveSpeed = _playerMoveSpeed,
+                AttackRange = _playerAttackRange,
+            },
             Enemies = _enemyDatas,
         });
         _engine.Start();

@@ -5,18 +5,16 @@ using MurimRunaway.Battle.Domain;
 namespace MurimRunaway.Battle.Engine
 {
     /// <summary>전투 시뮬레이션 본체. 틱마다 상태를 진행시키고 SnapshotPublished으로 통보.</summary>
-    public sealed class BattleEngine : IResourceMutator
+    public sealed class BattleEngine : IResourceMutator, ISkillExecutor
     {
         private readonly ITickService _tick;
         private readonly IRngService _rng;
 
-        private PlayerActor _player;
-        private EnemyActor[] _enemies;
-        private long _tickIndex = 0;
-        private float _timeSec = 0f;
-        private BattlePhase _phase;
+        private BattleContext _context;
+        private IBattleSystem[] _systems;
 
         public event Action<BattleSnapshot> SnapshotPublished;
+        public event Action<SkillCastEvent> SkillCastPublished;
 
         public BattleEngine(ITickService tick, IRngService rng)
         {
@@ -33,25 +31,27 @@ namespace MurimRunaway.Battle.Engine
         public void Setup(BattleStartData data)
         {
             _rng.Reseed(data.Seed);
-            _tickIndex = 0;
-            _timeSec = 0f;
-            _phase = BattlePhase.Setup;
             
-            _player = new PlayerActor
+            var player = new PlayerActor
             {
                 Id = 0,
                 Hp = data.Player.MaxHp,
                 MaxHp = data.Player.MaxHp,
                 Mana = data.Player.StartingMana,
                 MaxMana = data.Player.MaxMana,
+                Momentum = 0,
+                MaxMomentum = data.Player.MaxMomentum,
                 Position = 0f,
                 MoveSpeed = data.Player.MoveSpeed,
                 AttackRange = data.Player.AttackRange,
                 State = ActorState.Running,
                 SourceId = "player",
+                Skills = data.Player.StartingSkills
+                    .Select(skill => new SkillSlot { Data = skill })
+                    .ToArray(),
             };
 
-            _enemies = data.Enemies.Select((enemyData, index) => new EnemyActor
+            var enemies = data.Enemies.Select((enemyData, index) => new EnemyActor
             {
                 Id = index + 1,
                 Hp = enemyData.MaxHp,
@@ -60,102 +60,104 @@ namespace MurimRunaway.Battle.Engine
                 State = ActorState.Idle,
                 SourceId = enemyData.Id,
             }).ToArray();
+
+            _context = new BattleContext
+            {
+                Player = player,
+                Enemies = enemies,
+                TickIndex = 0,
+                TimeSec = 0f,
+                Phase = BattlePhase.Setup,
+                Rng = _rng,
+            };
+
+            // 등록 순서 = 실행 순서. Movement → Engagement → Casting.
+            _systems = new IBattleSystem[]
+            {
+                new MovementSystem(),
+                new EngagementSystem(),
+                new CastingSystem(this),
+            };
+        }
+
+        public void Start()
+        {
+            _context.Phase = BattlePhase.Approach;
+            PublishSnapshot();
         }
 
         public bool SpendMana(int amount)
         {
-            if (amount > _player.Mana)
+            if (amount > _context.Player.Mana)
                 return false;
-            
-            _player.Mana -= amount;
+
+            _context.Player.Mana -= amount;
             return true;
         }
 
         public void GainMana(int amount)
         {
-            var nextMana = _player.Mana + amount;
-            _player.Mana = Math.Min(nextMana, _player.MaxMana);
+            var nextMana = _context.Player.Mana + amount;
+            _context.Player.Mana = Math.Min(nextMana, _context.Player.MaxMana);
         }
 
-        public void Start() 
-        { 
-            _phase = BattlePhase.Approach;
-            PublishSnapshot();
+        public bool SpendMomentum(int amount)
+        {
+            if (amount > _context.Player.Momentum)
+                return false;
+
+            _context.Player.Momentum -= amount;
+            return true;
+        }
+
+        public void GainMomentum(int amount)
+        {
+            var nextMomentum = _context.Player.Momentum + amount;
+            _context.Player.Momentum = Math.Min(nextMomentum, _context.Player.MaxMomentum);
+        }
+
+        public bool TryCast(Actor caster, int slotIndex, Actor target)
+        {
+            var slot = _context.Player.Skills[slotIndex];
+            var skill = slot.Data;
+
+            if (!SpendMana(skill.ManaCost))
+                return false;
+
+            slot.CooldownRemaining = skill.CooldownSec;
+            GainMomentum(skill.MomentumGainOnCast);
+
+            var skillCast = new SkillCastEvent(caster.Id, skill.Id, target.Id);
+            SkillCastPublished?.Invoke(skillCast);
+            return true;
         }
 
         private void HandleTick(float deltaTime)
         {
-            if (_phase == BattlePhase.Resolve)
+            if (_context.Phase == BattlePhase.Resolve)
                 return;
 
-            _tickIndex++;
-            _timeSec += deltaTime;
+            _context.TickIndex++;
+            _context.TimeSec += deltaTime;
 
-            TickMovement(deltaTime);
-            TickEngagementCheck();
+            foreach (var system in _systems)
+                system.Tick(_context, deltaTime);
 
+            // 사망 판정 전까지 시스템 실행 뒤 바로 스냅샷을 보낸다.
             PublishSnapshot();
-        }
-
-        private void TickMovement(float deltaTime)
-        {
-            if (_player.State != ActorState.Running)
-                return;
-
-            _player.Position += _player.MoveSpeed * deltaTime;
-        }
-
-        private void TickEngagementCheck()
-        {
-            if (_player.State != ActorState.Running)
-                return;
-
-            var nearestIndex = FindNearestAliveEnemyIndex();
-            if (nearestIndex < 0)
-                return;
-
-            var nearest = _enemies[nearestIndex];
-            var distance = nearest.Position - _player.Position;
-            if (distance > _player.AttackRange)
-            {
-                return;
-            }
-
-            _player.Position = nearest.Position - _player.AttackRange;
-            _player.State = ActorState.Idle;
-            _phase = BattlePhase.Resolve;
-        }
-
-        private int FindNearestAliveEnemyIndex()
-        {
-            var nearestIndex = -1;
-            var nearestPosition = float.MaxValue;
-            for (var index = 0; index < _enemies.Length; index++)
-            {
-                var enemy = _enemies[index];
-                
-                if (enemy.State == ActorState.Dead)
-                    continue;
-
-                if (enemy.Position < nearestPosition)
-                {
-                    nearestPosition = enemy.Position;
-                    nearestIndex = index;
-                }
-            }
-
-            return nearestIndex;
         }
 
         private void PublishSnapshot()
         {
-            var actors = new ActorView[1 + _enemies.Length];
+            var enemies = _context.Enemies;
+            var actors = new ActorView[1 + enemies.Length];
 
-            actors[0] = _player.ToView();
-            for (var index = 0; index < _enemies.Length; index++)
-                actors[index + 1] = _enemies[index].ToView();
+            actors[0] = _context.Player.ToView();
+            for (var index = 0; index < enemies.Length; index++)
+                actors[index + 1] = enemies[index].ToView();
 
-            SnapshotPublished?.Invoke(new BattleSnapshot(_tickIndex, _timeSec, actors, _phase));
+            SnapshotPublished?.Invoke(
+                new BattleSnapshot(_context.TickIndex, _context.TimeSec, actors, _context.Phase));
         }
     }
 }

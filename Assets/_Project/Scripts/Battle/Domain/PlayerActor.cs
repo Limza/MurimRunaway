@@ -4,7 +4,16 @@ namespace MurimRunaway.Battle.Domain
     public sealed class PlayerActor : Actor
     {
         public float MoveSpeed;
+
+        // 내공
         public int Mana;
         public int MaxMana;
+
+        // 기세
+        public int Momentum;
+        public int MaxMomentum;
+
+        // 학습한 무공
+        public SkillSlot[] Skills;
     }
 }

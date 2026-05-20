@@ -19,7 +19,10 @@ namespace MurimRunaway.Battle.View
 
         [SerializeField] private int _seed = 1;
         [SerializeField] private int _playerMaxHp = 50;
+        [SerializeField] private int _playerMaxMana = 100;
+        [SerializeField] private int _playerStartingMana = 50;
         [SerializeField] private float _playerMoveSpeed = 10f;
+        [SerializeField] private float _playerAttackRange = 20f;
 
         private BattleEngine _engine;
         private RectTransform[] _enemyMarkers;
@@ -44,7 +47,14 @@ namespace MurimRunaway.Battle.View
             _engine.Setup(new BattleStartData
             {
                 Seed = _seed,
-                Player = new PlayerStartData { MaxHp = _playerMaxHp, MoveSpeed = _playerMoveSpeed },
+                Player = new PlayerStartData
+                {
+                    MaxHp = _playerMaxHp,
+                    MaxMana = _playerMaxMana,
+                    StartingMana = _playerStartingMana,
+                    MoveSpeed = _playerMoveSpeed,
+                    AttackRange = _playerAttackRange,
+                },
                 Enemies = _enemyDatas,
             });
 

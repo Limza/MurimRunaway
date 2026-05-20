@@ -21,7 +21,10 @@ namespace MurimRunaway.Battle.View
                 builder.Register<IRngService, RngService>(Lifetime.Singleton);
 
                 // BattleEngine은 IResourceMutator로도 등록. BattleEngine 과 IResourceMutator 둘 다 필요한 경우가 있어서.
-                builder.Register<BattleEngine>(Lifetime.Singleton).AsSelf().As<IResourceMutator>();   
+                builder.Register<BattleEngine>(Lifetime.Singleton)
+                    .AsSelf()
+                    .As<IResourceMutator>()
+                    .As<ISkillExecutor>();
             }
 
             // 씬 계층에 있는 인스턴스 등록

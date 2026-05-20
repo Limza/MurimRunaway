@@ -231,7 +231,7 @@ public interface IBattleEngine
 **Data (추가)**:
 
 `ActorState` enum (Domain):
-- `Idle` / `Running` / `Casting` / `HeavyCharging` / `Stunned` / `Dead`
+- `None` / `Idle` / `Running` / `Casting` / `HeavyCharging` / `Stunned` / `Dead`
 - 본 Phase에서 사용되는 상태: Idle, Running, Dead (남은 상태는 후속 Phase에서 활성화).
 
 `Actor` POCO (Domain — 런타임 인스턴스):
@@ -258,9 +258,12 @@ public interface IBattleEngine
 | 필드 | 타입 | 설명 |
 |------|------|------|
 | playerMaxHp | int | 플레이어 시작 HP |
-| playerRunSpeed | float | 플레이어 진군 속도 (dist/s, 디폴트 5.0). Phase 9 경공이 일시 부스트 |
-| playerAttackRange | float | 플레이어 공격 사거리 (디폴트 20.0). 가장 가까운 적과의 거리 ≤ 이 값이면 진군 정지. Phase 8/12에서 재능·카드로 가변 |
+| playerRunSpeed | float | 플레이어 진군 속도 (dist/s). Config/씬/테스트가 값을 채워서 넘김 |
+| playerAttackRange | float | 플레이어 공격 사거리. 가장 가까운 적과의 거리 ≤ 이 값이면 진군 정지 |
 | enemies | EnemyData[] | 등장 적 |
+
+`BattleStartData`와 `PlayerStartData`는 밸런스 기본값을 갖지 않는다.
+Config, 씬 임시 입력, 테스트 빌더가 시작값을 정하고 Engine에는 완성된 입력만 넘긴다.
 
 > [!note]
 > **AttackRange는 Actor 공통 속성** — Phase 1엔 Player만 사용, Phase 4+에서 Enemy도 능동 공격 시작 거리로 활용 (같은 필드 의미·다른 소유자).
@@ -271,7 +274,7 @@ public interface IBattleEngine
 | tickIndex | long | 시뮬 스텝 ID — 결정론 비교 키·로그 식별자 (정수) |
 | timeSec | float | 전투 시작 후 누적 경과(초) — UI/게임 로직 타이밍 (Engine 내부에서 dt 누적) |
 | actors | ActorView[] | 액터 read-only 사본 |
-| phase | BattlePhase enum | Setup/Approach/Engage/Resolve |
+| phase | BattlePhase enum | None/Setup/Approach/Engage/Resolve |
 
 **State machine (Battle FSM, 추가)**:
 ```
@@ -296,7 +299,7 @@ Setup → Approach → Resolve(victory/defeat)
 ```csharp
 public interface IBattleInput
 {
-    // 본 Phase에선 사용 X (후속 Phase에서 사용)
+    // 아직 사용하지 않음
 }
 
 public readonly struct ActorView
@@ -389,18 +392,24 @@ ActorView 확장 (Player 한정):
 
 **Data (추가)**:
 
-`SkillType` enum (Domain):
-- `Choseok` (초식 — 능동 공격)
-- `Simbeop` (심법 — 패시브 버프)
-- `Gyeonggong` (경공 — 이동/회피)
-- `Ouui` (오의 — 핫키 발동, 기세 소비)
+`SkillKind` enum (Domain):
+- `None` (아직 종류가 정해지지 않음)
+- `Technique` (초식 — 공격/방어 기술)
+- `Focus` (심법 — 패시브 버프)
+- `Step` (경공 — 이동/회피)
+- `Ultimate` (오의 — 핫키 발동, 기세 소비)
 
 `SkillRange` enum (Domain):
-- `Close` / `Mid` / `Long`
+- `None` / `Close` / `Mid` / `Long`
 - 거리 게이팅 매핑 (디폴트):
   - Close: position ≤ 25
   - Mid: 25 < position ≤ 60
   - Long: 60 < position ≤ 100
+
+> [!warning]- 향후 config 전환 후보
+> `Close`/`Mid`/`Long` 경계값은 밸런싱 값이다.
+> Phase 3에서는 `CastingSystem` 상수로 둔다.
+> 거리 구간을 코드 수정 없이 조정해야 하는 시점에 전역 `SkillRangeConfig`로 옮긴다.
 
 `SkillData` SO (Domain):
 | 필드 | 타입 | 디폴트 | 설명 |
@@ -408,10 +417,10 @@ ActorView 확장 (Player 한정):
 | id | string | — | 고유 식별자 (snake_case) |
 | nameKey | string | — | L10n 키 (`skill.<id>.name`) — Unity Localization String Table 조회 |
 | descKey | string | — | L10n 키 (`skill.<id>.desc`) |
-| type | SkillType | Choseok | 분류 |
+| kind | SkillKind | None | 분류 |
 | manaCost | int | 5 | 시전 비용 |
 | cooldownSec | float | 1.5 | 쿨타임 |
-| preferredRange | SkillRange | Close | 선호 거리 |
+| preferredRange | SkillRange | None | 선호 거리 |
 | momentumGainOnCast | int | 1 | 시전 성공 시 기세 획득 |
 | effects | SkillEffect[] | — | 발동 시 적용 효과 (Phase 4에서 정의) |
 
@@ -441,8 +450,8 @@ ActorView 확장 (Player 한정):
    - 슬롯이 비었으면 skip.
    - `cooldowns[i] > 0` 이면 skip.
    - `mana < skill.manaCost` 이면 skip.
-   - `IsInPreferredRange(target.position, skill.preferredRange) == false` 이면 skip.
-   - skill.type == Simbeop 이고 효과가 이미 활성 중이면 skip (중복 방지).
+   - `IsInPreferredRange(distance, skill.preferredRange) == false` 이면 skip.
+   - skill.kind == Focus 이고 효과가 이미 활성 중이면 skip (중복 방지).
    - **여기까지 통과한 첫 스킬을 시전하고 break.**
 4. **시전 처리**:
    - SpendMana(skill.manaCost). 실패 시 step 종료 (race condition 안전).
@@ -455,7 +464,7 @@ ActorView 확장 (Player 한정):
 > **루프 제약**: 한 Tick에 한 슬롯만 시전 (위 break). 두 스킬 동시 발동 금지. 이는 §6.4 SSOT의 "강공 동시 발동 정책" 결정과 정합.
 
 **Formulas**:
-- `IsInPreferredRange(pos, range)` — `SkillRange` 정의 참조.
+- `IsInPreferredRange(distance, range)` — `SkillRange` 정의 참조.
 
 **Interfaces (추가)**:
 ```csharp
@@ -524,7 +533,7 @@ event Action<int /*casterId*/, string /*skillId*/, int /*targetId*/> OnSkillCast
 
 **Formulas — 데미지 (단순 1차)**:
 ```
-finalDamage = baseDamage      // 본 Phase에선 매트릭스/회피/방어/공격 보정 없음
+finalDamage = baseDamage      // 매트릭스/회피/방어/공격 보정 없음
 hp_new      = max(0, hp_old - finalDamage)
 ```
 > [!note]
@@ -732,7 +741,7 @@ event Action<DefenseChoice chosen, DefenseMatchup result, int damageDealt, int c
 `SkillData` 확장 (오의용):
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| isOuui | bool | type==Ouui이면 true |
+| isOuui | bool | kind==Ultimate이면 true |
 | momentumCost | int | 오의 발동 비용 (디폴트 5) |
 | ouuiPatternChoices | OuuiPattern[] | 이 오의가 사용 가능한 패턴 (보통 3개 모두) |
 
@@ -892,7 +901,7 @@ public interface IChoicePoolProvider
 ### Phase 8. 재능 3종 (Talents)
 
 > [!info]-
-> **v4.1 (2026-05-14)**: 재능은 런 시작 선택이 아니라 **런 종료 시 확률 각성**으로 캐릭터에 0~3개 누적(동시 작동·가중치 스택). 본 Phase 8은 **재능이 적용된 상태의 효과**(시작값 차별화)만 정의 — 각성 트리거 자체는 Phase 11+에서. **첫 런 = 재능 0개**: 본 Phase의 재능 효과가 전혀 적용되지 않은 균일 베이스라인 (시작값은 [Phase 2 `PlayerStartData`](#phase-2-자원--hp--내공--기세--오성) 디폴트 사용). Phase 8의 모든 메커니즘은 0개 케이스에서 자연 통과해야 한다. 다중 재능 가중치 합산 방식·Pity·캐릭터 단일성은 §4 Open Q (Q-8~Q-10).
+> **v4.1 (2026-05-14)**: 재능은 런 시작 선택이 아니라 **런 종료 시 확률 각성**으로 캐릭터에 0~3개 누적(동시 작동·가중치 스택). 본 Phase 8은 **재능이 적용된 상태의 효과**(시작값 차별화)만 정의 — 각성 트리거 자체는 Phase 11+에서. **첫 런 = 재능 0개**: 본 Phase의 재능 효과가 전혀 적용되지 않은 균일 베이스라인 (시작값은 Config 기준값을 사용하고 `PlayerStartData`에 채워서 넘김). Phase 8의 모든 메커니즘은 0개 케이스에서 자연 통과해야 한다. 다중 재능 가중치 합산 방식·Pity·캐릭터 단일성은 §4 Open Q (Q-8~Q-10).
 
 **Goal**: 천무지체 / 카피 / 대종사 — startingMomentum, startingWisdom, startingSkillSlots, 재능별 특수 능력 훅을 정의. 본 Phase는 **시작값 차별화**까지만 활성화. 카피의 "적 무공 카피" / 대종사의 "강화 추가 효과"는 Phase 8.x로 후속.
 
@@ -945,7 +954,7 @@ public interface ITalentSpecialBehavior
 - I-8.2: TalentData는 Setup 시 적용된 후 변경되지 않는다 (불변).
 
 **Edge**:
-- v4.1: 재능 0개(첫 런)인 경우 `PlayerStartData` 디폴트 baseline 적용 — 재능 효과 미적용(헤더 노트 참조). 본 항목 이전 wording("재능 미선택 → 천무지체 디폴트")은 v4 가설(런 시작 선택)의 잔재.
+- v4.1: 재능 0개(첫 런)인 경우 Config 기준값을 `PlayerStartData`에 채워서 사용 — 재능 효과 미적용(헤더 노트 참조). 본 항목 이전 wording("재능 미선택 → 천무지체 디폴트")은 v4 가설(런 시작 선택)의 잔재.
 - 시작 무공이 maxSlot(6)을 초과하면 컨텐츠 검증 단계에서 거부.
 
 **Acceptance**:
@@ -983,7 +992,7 @@ public interface ITalentSpecialBehavior
    - 아니면 `RngService.NextFloat01() < dodgeBaseRate` → 데미지 0.
    - 둘 다 아니면 데미지 정상 적용.
 2. **경공 트리거 (HP 30% 이하 진입 첫 번째 1회)**:
-   - **트리거 조건 (결정)**: PlayerActor의 skillSlots 중 SkillType.Gyeonggong 무공이 1개 이상 존재할 때만 활성화. 경공 무공이 없는 빌드는 보장 회피 자체가 없음.
+   - **트리거 조건 (결정)**: PlayerActor의 skillSlots 중 SkillKind.Step 무공이 1개 이상 존재할 때만 활성화. 경공 무공이 없는 빌드는 보장 회피 자체가 없음.
    - 조건 충족 + HP 30% 이하 진입 시 다음 데미지 1회를 보장 회피.
 3. 회피 발생 시 `OnDodge(targetId, sourceKind)` 이벤트.
 
@@ -1084,7 +1093,7 @@ public interface ITelemetrySink
 
 **구현 메모**
 - `CardData` SO (효과 + 시너지 태그 + 풀 종류), `CardDraftService` — 풀별 추첨 분리.
-- 효과 적용은 기존 자원 4종 / 무공 시스템에 후킹 (자원 max 증가, 시전 가속, 데미지 보너스, 특정 SkillType 강화 등).
+- 효과 적용은 기존 자원 4종 / 무공 시스템에 후킹 (자원 max 증가, 시전 가속, 데미지 보너스, 특정 SkillKind 강화 등).
 - 오성(Phase 7)이 풀 등급 게이팅에 영향 — Wisdom Tier별 카드 풀 차등.
 
 #### Phase 13. 메타 진행 (Meta Progression)
@@ -1145,6 +1154,10 @@ public interface ITelemetrySink
 | 2026-05-14 | 0.4.1 | **카드 시스템 구조 결정** — 하이브리드 이중 풀(계승+휘발). 계승 풀에 무공 4슬롯(액티브 2 + 패시브 2), 슬롯별 1~6장 모션 진화 + 7~17장 1~12성 위력 누산(12성 특별 연출). 휘발 풀은 슬롯 없이 한 런 내 누적, 무공+패시브 둘 다. 단일 클래스=검사, 평타 세로 베기 자동. Phase 12/13 개요 갱신, Open Q-14~Q-18 추가. |
 | 2026-05-14 | 0.4.2 | **Phase 2 스코프 컷 — 기세/오성 제외**. (a) **기세**: 단독 자원으로 의미 부족(쌓기·소비 메커닉과 짝일 때만 성립) → Phase 3 SkillData 도입과 동반 이동(P3 PlayerActor 확장에 momentum/maxMomentum, IResourceMutator에 GainMomentum/SpendMomentum). (b) **오성**: per-battle 자원으로 두면 키우기 게임 결에서 곧 max → 메타 패시브 슬롯(PlayerData, Phase 11+)으로 이관. P7 Wisdom 출처 = 메타 슬롯(Phase 11+ 미도입 시 placeholder), P8 talent 표에서 startingWisdom 제거(카피 정보 핸디캡 의도는 메타 풀 가중치로 재현). Q-3 회복원에서 기세 제거, Phase 2 Acceptance에 VContainer 항목 추가. Phase_2_Guide.md 동시 갱신. |
 | 2026-05-15 | 0.4.3 | **Phase 2 완료** — 자원 2종(HP/내공) 컨테이너 + `IResourceMutator`(SpendMana atomic / GainMana silent clamp) + VContainer DI 도입. Domain 확장(`PlayerActor.Mana`/`MaxMana`, `PlayerStartData` 내공 시작값, `ActorView` Player 한정 `Mana`/`MaxMana` — Enemy는 0) + Engine(`BattleEngine : IResourceMutator`, `Setup` 자원 초기화) + View(`ResourceBar` + Battle 씬 HP/내공 게이지) + `BattleLifetimeScope`(Tick·Rng·Engine 조립을 VContainer로 위임). EditMode 테스트 `ResourceMutatorTests`(SpendMana 부족 시 거절+값 불변 / GainMana maxMana 클램프) 통과. Phase 2 Guide/Learned/AssetQueue → `Completed/Completed_Phase_2_*` 이관. 커밋 `3f018fa`. |
+| 2026-05-20 | 0.4.4 | Phase 3 무공 분류 enum 표기를 `SkillKind`로 정리하고 멤버를 `Technique`/`Focus`/`Step`/`Ultimate`로 변경. 초식은 공격 전용이 아니므로 `Strike` 대신 `Technique` 사용. |
+| 2026-05-20 | 0.4.5 | 프로젝트 enum 기본값 규칙 정리. 초기화 누락을 실제 값으로 착각하지 않도록 enum 첫 값은 `None = 0`으로 둔다. `ActorState`/`BattlePhase`/`SkillKind`/`SkillRange`에 `None` 추가. |
+| 2026-05-20 | 0.4.6 | `PlayerStartData`를 순수 전투 시작 입력으로 정리. 밸런스 기본값은 Config/씬/테스트 빌더에서 정하고, `PlayerStartData`에는 완성된 값만 담는다. |
+| 2026-05-20 | 0.4.7 | `SkillRange` 거리 경계값을 Phase 3에서는 코드 상수로 두되, 향후 전역 `SkillRangeConfig` 전환 후보로 기록. `IsInPreferredRange` 입력 용어를 절대 좌표가 아닌 `distance`로 정리. |
 
 ---
 

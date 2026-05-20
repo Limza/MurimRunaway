@@ -145,7 +145,7 @@ builder.RegisterComponentInHierarchy<BattleSceneController>();
 
 **왜 SO에 자원을 두지 않는가**:
 - SO는 **에셋 파일**. 런타임에 필드를 변경하면 에디터에선 디스크에 반영된다 (Play 모드 종료 후에도 남음).
-- Phase 2 학습 노트의 핵심 — **런타임 가변 값은 절대 SO에 두지 않는다**. 시작값(maxMana의 디폴트=100)은 `PlayerStartData`(POCO) 또는 향후 메타 강화 SO의 baseline 필드로.
+- Phase 2 학습 노트의 핵심 — **런타임 가변 값은 절대 SO에 두지 않는다**. 시작 기준값은 Config나 향후 메타 강화 데이터에서 정하고, 한 전투에 들어갈 때 `PlayerStartData`에 채워서 넘긴다.
 
 이건 [[Completed_Phase_1_Learned]] §3에서 EnemyData를 직접 mutate하지 않고 EnemyActor로 복사한 것과 같은 원리. **"읽기 전용 데이터" vs "런타임 상태"의 분리**.
 
