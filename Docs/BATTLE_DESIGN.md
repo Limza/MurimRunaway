@@ -125,6 +125,8 @@ flowchart TD
 - 시드는 `(runSeed, battleIndex)` 의 결합으로 생성. 같은 시드 + 같은 BattleStartData + 같은 입력 시퀀스 = 같은 결과.
 - `Time.deltaTime` 직접 사용 금지. Engine은 `ITickService` 가 전달하는 `dt` 만 사용한다.
 - 고정 dt = **0.05초** (20Hz). View는 별도로 자기 프레임에 보간 표시.
+- View의 보간은 **표시 전용**이다. 이동 마커와 쿨타임 게이지처럼 연속으로 보여야 하는 값은 마지막 `BattleSnapshot`을 기준으로 `Time.time`/`Time.deltaTime`을 써서 매 프레임 그릴 수 있다.
+- View 보간 값은 Engine 상태로 되돌려 쓰지 않는다.
 - 부동소수 비교는 `<=` / `>=` 만 사용 (등가 비교 금지) — 거리·시간 오차 회피.
 
 ### 2.5 데이터 컨벤션
@@ -259,14 +261,15 @@ public interface IBattleEngine
 |------|------|------|
 | playerMaxHp | int | 플레이어 시작 HP |
 | playerRunSpeed | float | 플레이어 진군 속도 (dist/s). Config/씬/테스트가 값을 채워서 넘김 |
-| playerAttackRange | float | 플레이어 공격 사거리. 가장 가까운 적과의 거리 ≤ 이 값이면 진군 정지 |
+| playerEngageDistance | float | 교전 시작 거리. 가장 가까운 적과의 거리 ≤ 이 값이면 진군 정지 |
 | enemies | EnemyData[] | 등장 적 |
 
 `BattleStartData`와 `PlayerStartData`는 밸런스 기본값을 갖지 않는다.
 Config, 씬 임시 입력, 테스트 빌더가 시작값을 정하고 Engine에는 완성된 입력만 넘긴다.
 
 > [!note]
-> **AttackRange는 Actor 공통 속성** — Phase 1엔 Player만 사용, Phase 4+에서 Enemy도 능동 공격 시작 거리로 활용 (같은 필드 의미·다른 소유자).
+> **EngageDistance는 Actor 공통 속성** — Phase 1엔 Player만 사용한다.
+> Phase 4+에서 Enemy도 능동 공격 시작 거리로 사용할 수 있다.
 
 `BattleSnapshot` (Engine → View):
 | 필드 | 타입 | 설명 |
@@ -283,13 +286,13 @@ Setup → Approach → Resolve(victory/defeat)
 - 본 Phase에선 Engage 없이 Approach가 끝나면 자동으로 Resolve(victory) — 적이 stopPosition 도달만 보면 됨. Engage 페이즈는 P3에서 도입.
 
 **State machine (Actor FSM, 추가)**:
-- Player: Running → (가장 가까운 살아있는 Enemy와의 거리 ≤ player.attackRange) → Idle
+- Player: Running → (가장 가까운 살아있는 Enemy와의 거리 ≤ player.engageDistance) → Idle
 - Enemy: Idle 고정 (적은 진군하지 않음, Phase 1에서는 사망도 없음).
 - **Player.position은 0에서 시작해 Running 상태일 때 매 틱 증가.** 적은 spawnPosition에 고정. 경공(Phase 9)은 `playerRunSpeed`의 일시 부스트로 구현.
 
 **Behaviors**:
 1. `Setup(data, seed)` — Player Actor 1 생성 (position=0, state=Running). Enemy Actor[] 생성 (position=spawnPosition, state=Idle). RngService.Reseed(seed).
-2. 매 Tick(dt): Player가 Running이면 `player.position += playerRunSpeed × dt`. 가장 가까운 살아있는 Enemy와의 거리(`enemy.position - player.position`)가 ≤ `player.attackRange`이면 Player → Idle.
+2. 매 Tick(dt): Player가 Running이면 `player.position += playerRunSpeed × dt`. 가장 가까운 살아있는 Enemy와의 거리(`enemy.position - player.position`)가 ≤ `player.engageDistance`이면 Player → Idle.
 3. Player가 Idle로 전이하면 BattlePhase = Resolve(victory) 송신 후 종료.
 4. 매 Tick 끝에 BattleSnapshot 송신.
 
@@ -321,11 +324,11 @@ public readonly struct ActorView
 
 **Edge**:
 - 동일 spawnPosition에 적 N명을 배치할 경우, position은 같지만 id가 다르므로 ActorView 순서는 id 오름차순으로 직렬화한다 (스냅샷 결정성 보장).
-- Tick dt가 큰 경우(에디터 일시정지 후 재개) Player가 가장 가까운 적의 공격 사거리 안쪽으로 들어가버릴 수 있음 → Idle 전이 시 `player.position = nearestEnemy.position - player.attackRange` 로 클램프.
+- Tick dt가 큰 경우(에디터 일시정지 후 재개) Player가 교전 시작 거리 안쪽으로 들어가버릴 수 있음 → Idle 전이 시 `player.position = nearestEnemy.position - player.engageDistance` 로 클램프.
 
 **Acceptance**:
-- [ ] Player 1 (runSpeed=5, attackRange=20), Enemy 1 (spawn=100) → 16.0s ± 0.05s 안에 Player Idle 전이 + Resolve(victory) 송신.
-- [ ] Player(attackRange=20) vs Enemy 3명 spawn={60, 80, 100} → 가장 가까운 적(spawn=60)이 사거리 내가 되는 순간 Resolve. Player.position=40으로 클램프, 나머지 적 2명은 Idle 유지(Phase 1엔 Player만 진군).
+- [ ] Player 1 (runSpeed=5, engageDistance=20), Enemy 1 (spawn=100) → 16.0s ± 0.05s 안에 Player Idle 전이 + Resolve(victory) 송신.
+- [ ] Player(engageDistance=20) vs Enemy 3명 spawn={60, 80, 100} → 가장 가까운 적(spawn=60)이 교전 시작 거리 내가 되는 순간 Resolve. Player.position=40으로 클램프, 나머지 적 2명은 Idle 유지(Phase 1엔 Player만 진군).
 - [ ] EditMode 테스트: Approach(1명) + NearestEnemy(3명) 통과. (결정성 테스트는 RNG 실사용 시작 Phase에서 도입.)
 - [ ] PlayMode 시각 확인: 플레이어 마커가 거리 게이지에서 적 쪽으로 실시간 이동.
 
@@ -400,16 +403,11 @@ ActorView 확장 (Player 한정):
 - `Ultimate` (오의 — 핫키 발동, 기세 소비)
 
 `SkillRange` enum (Domain):
-- `None` / `Close` / `Mid` / `Long`
-- 거리 게이팅 매핑 (디폴트):
-  - Close: position ≤ 25
-  - Mid: 25 < position ≤ 60
-  - Long: 60 < position ≤ 100
-
-> [!warning]- 향후 config 전환 후보
-> `Close`/`Mid`/`Long` 경계값은 밸런싱 값이다.
-> Phase 3에서는 `CastingSystem` 상수로 둔다.
-> 거리 구간을 코드 수정 없이 조정해야 하는 시점에 전역 `SkillRangeConfig`로 옮긴다.
+- `None` / `Single` / `NearbyPair` / `All`
+- 타겟 범위:
+  - Single: 가장 앞의 살아있는 적 1명
+  - NearbyPair: 가장 앞의 살아있는 적과 그 다음 살아있는 적까지 최대 2명
+  - All: 화면 안의 모든 살아있는 적
 
 `SkillData` SO (Domain):
 | 필드 | 타입 | 디폴트 | 설명 |
@@ -420,7 +418,7 @@ ActorView 확장 (Player 한정):
 | kind | SkillKind | None | 분류 |
 | manaCost | int | 5 | 시전 비용 |
 | cooldownSec | float | 1.5 | 쿨타임 |
-| preferredRange | SkillRange | None | 선호 거리 |
+| preferredRange | SkillRange | None | 타겟 범위 |
 | momentumGainOnCast | int | 1 | 시전 성공 시 기세 획득 |
 | effects | SkillEffect[] | — | 발동 시 적용 효과 (Phase 4에서 정의) |
 
@@ -450,7 +448,6 @@ ActorView 확장 (Player 한정):
    - 슬롯이 비었으면 skip.
    - `cooldowns[i] > 0` 이면 skip.
    - `mana < skill.manaCost` 이면 skip.
-   - `IsInPreferredRange(distance, skill.preferredRange) == false` 이면 skip.
    - skill.kind == Focus 이고 효과가 이미 활성 중이면 skip (중복 방지).
    - **여기까지 통과한 첫 스킬을 시전하고 break.**
 4. **시전 처리**:
@@ -458,13 +455,12 @@ ActorView 확장 (Player 한정):
    - cooldowns[i] = skill.cooldownSec.
    - GainMomentum(skill.momentumGainOnCast).
    - skill.effects 적용 (Phase 4에서 정의).
-   - `OnSkillCast(actorId, skillId, targetId)` 이벤트 발생.
+   - `OnSkillCast(actorId, slotIndex, skillId, targetId)` 이벤트 발생.
 
 > [!note]
 > **루프 제약**: 한 Tick에 한 슬롯만 시전 (위 break). 두 스킬 동시 발동 금지. 이는 §6.4 SSOT의 "강공 동시 발동 정책" 결정과 정합.
 
-**Formulas**:
-- `IsInPreferredRange(distance, range)` — `SkillRange` 정의 참조.
+**Formulas**: 없음.
 
 **Interfaces (추가)**:
 ```csharp
@@ -474,7 +470,7 @@ public interface ISkillExecutor
 }
 
 // Engine 이벤트
-event Action<int /*casterId*/, string /*skillId*/, int /*targetId*/> OnSkillCast;
+event Action<SkillCastEvent> OnSkillCast;
 ```
 
 **Invariants**:
@@ -489,10 +485,10 @@ event Action<int /*casterId*/, string /*skillId*/, int /*targetId*/> OnSkillCast
 - 시전 직후 적이 즉사하는 경우(Phase 4)에는 이벤트가 먼저 발생하고 사망 처리는 이후 Tick에서 적용 — 단일 Tick 내 순서 정의: (1) 쿨다운 감소 → (2) 시전 → (3) 효과 적용 → (4) 사망 판정 → (5) 스냅샷.
 
 **Acceptance**:
-- [ ] EditMode: 슬롯[태인장(Close), 천하삼십육검(Mid)] 적이 Mid 거리면 천하삼십육검만 시전.
+- [ ] EditMode: 슬롯[태인장(Single), 천하삼십육검(NearbyPair)]이 모두 조건을 통과하면 슬롯 순서대로 태인장이 먼저 시전.
 - [ ] EditMode: 내공 부족 시 시전 X, 충전 후 다음 Tick에 시전.
 - [ ] EditMode: 결정성 — 같은 시드 + 같은 슬롯/적 구성 → OnSkillCast 시퀀스 동일.
-- [ ] PlayMode: 슬롯 위에 쿨 게이지 + 시전 시 skill 이름이 1초 표시.
+- [ ] PlayMode: 슬롯 위에 쿨 게이지 + 시전 시 해당 슬롯에 skill 이름이 1초 표시.
 
 ---
 
@@ -509,7 +505,7 @@ event Action<int /*casterId*/, string /*skillId*/, int /*targetId*/> OnSkillCast
 |------|------|--------|------|
 | normalAttackDamage | int | 3 | 일반 공격 데미지 |
 | normalAttackPeriod | float | 2.5 | 공격 주기 (초) |
-| normalAttackRange | SkillRange | Close | 사거리 |
+| normalAttackRange | SkillRange | Single | 타겟 범위 |
 
 `SkillEffect` (Domain — sealed class 다형성):
 - `DamageEffect { int amount }`
@@ -1158,6 +1154,9 @@ public interface ITelemetrySink
 | 2026-05-20 | 0.4.5 | 프로젝트 enum 기본값 규칙 정리. 초기화 누락을 실제 값으로 착각하지 않도록 enum 첫 값은 `None = 0`으로 둔다. `ActorState`/`BattlePhase`/`SkillKind`/`SkillRange`에 `None` 추가. |
 | 2026-05-20 | 0.4.6 | `PlayerStartData`를 순수 전투 시작 입력으로 정리. 밸런스 기본값은 Config/씬/테스트 빌더에서 정하고, `PlayerStartData`에는 완성된 값만 담는다. |
 | 2026-05-20 | 0.4.7 | `SkillRange` 거리 경계값을 Phase 3에서는 코드 상수로 두되, 향후 전역 `SkillRangeConfig` 전환 후보로 기록. `IsInPreferredRange` 입력 용어를 절대 좌표가 아닌 `distance`로 정리. |
+| 2026-05-21 | 0.4.8 | `SkillRange`를 정확한 거리 밴드가 아니라 사거리 등급으로 정리. Close는 25 이하, Mid는 60 이하, Long은 100 이하에서 시전 가능하므로 가까운 적에게 Mid 무공도 사용할 수 있다. |
+| 2026-05-21 | 0.4.9 | `AttackRange`를 `EngageDistance`로 재명명해 교전 시작 거리와 무공 범위를 분리. `SkillRange` 멤버를 `Single`/`NearbyPair`/`All`로 바꾸고, 거리 게이팅이 아니라 타겟 범위 의미로 정리. |
+| 2026-05-21 | 0.4.10 | **Phase 3 완료** — `IBattleSystem` 구조 도입, `MovementSystem`/`EngagementSystem`/`CastingSystem` 분리, `SkillData`/`SkillSlot`/기세 자원/자동 시전 결정 트리 추가. EditMode 테스트와 PlayMode 확인 체크리스트 통과. |
 
 ---
 

@@ -8,7 +8,7 @@ namespace MurimRunaway.Battle.Domain
         public int StartingMana;
         public int MaxMomentum;
         public float MoveSpeed;
-        public float AttackRange;
+        public float EngageDistance;
 
         public SkillData[] StartingSkills;
     }

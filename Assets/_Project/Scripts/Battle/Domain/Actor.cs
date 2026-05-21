@@ -9,7 +9,7 @@ namespace MurimRunaway.Battle.Domain
         public float Position;
         public ActorState State;
         public string SourceId;
-        public float AttackRange;
+        public float EngageDistance;
 
         public ActorView ToView() => new(this);
     }

@@ -43,10 +43,10 @@ namespace MurimRunaway.Battle.Engine
                 MaxMomentum = data.Player.MaxMomentum,
                 Position = 0f,
                 MoveSpeed = data.Player.MoveSpeed,
-                AttackRange = data.Player.AttackRange,
+                EngageDistance = data.Player.EngageDistance,
                 State = ActorState.Running,
                 SourceId = "player",
-                Skills = data.Player.StartingSkills
+                Skills = (data.Player.StartingSkills ?? Array.Empty<SkillData>())
                     .Select(skill => new SkillSlot { Data = skill })
                     .ToArray(),
             };
@@ -127,8 +127,8 @@ namespace MurimRunaway.Battle.Engine
             slot.CooldownRemaining = skill.CooldownSec;
             GainMomentum(skill.MomentumGainOnCast);
 
-            var skillCast = new SkillCastEvent(caster.Id, skill.Id, target.Id);
-            SkillCastPublished?.Invoke(skillCast);
+            var skillCastEvent = new SkillCastEvent(caster.Id, slotIndex, skill.Id, target.Id);
+            SkillCastPublished?.Invoke(skillCastEvent);
             return true;
         }
 

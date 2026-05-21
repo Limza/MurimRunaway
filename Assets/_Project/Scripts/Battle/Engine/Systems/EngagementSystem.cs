@@ -16,11 +16,11 @@ namespace MurimRunaway.Battle.Engine
                 return;
 
             var distance = nearest.Position - player.Position;
-            if (distance > player.AttackRange)
+            if (distance > player.EngageDistance)
                 return;
 
-            // 큰 deltaTime이 사거리 안쪽으로 밀어넣는 것 방지
-            player.Position = nearest.Position - player.AttackRange;
+            // 큰 deltaTime이 교전 거리 안쪽으로 밀어넣는 것 방지
+            player.Position = nearest.Position - player.EngageDistance;
             player.State = ActorState.Idle;
             context.Phase = BattlePhase.Engage;
         }

@@ -25,7 +25,7 @@ namespace MurimRunaway.Battle.Domain
         [Tooltip("쿨타임 (초)")]
         public float CooldownSec;
 
-        [Tooltip("선호 거리대 — 이 거리대 안에서만 자동 시전")]
+        [Tooltip("타겟 범위")]
         public SkillRange PreferredRange = SkillRange.None;
 
         [Tooltip("시전 성공 시 획득하는 기세")]

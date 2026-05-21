@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using MurimRunaway.Battle.Domain;
-using MurimRunaway.Battle.Engine;
-using UnityEngine;
 
 namespace MurimRunaway.Battle.Tests
 {
@@ -27,28 +25,14 @@ namespace MurimRunaway.Battle.Tests
         private static List<BattleSnapshot> RunBattle(int seed)
         {
             var tick = new MockTickService();
-            var engine = new BattleEngine(tick, new RngService());
+            var engine = BattleTestFactory.CreateEngine(
+                tick,
+                seed: seed,
+                enemies: new[] { BattleTestFactory.CreateEnemy("e", 100f) });
             var captured = new List<BattleSnapshot>();
             engine.SnapshotPublished += s => captured.Add(s);
 
-            var enemy = ScriptableObject.CreateInstance<EnemyData>();
-            enemy.Id = "e";
-            enemy.MaxHp = 30;
-            enemy.SpawnPosition = 100f;
-
-            engine.Setup(new BattleStartData
-            {
-                Seed = seed,
-                Player = new PlayerStartData
-                {
-                    MaxHp = 50,
-                    MaxMana = 100,
-                    StartingMana = 50,
-                    MoveSpeed = 5f,
-                    AttackRange = 20f,
-                },
-                Enemies = new[] { enemy }
-            });
+            engine.Start();
             tick.PumpTicks(400);
             return captured;
         }

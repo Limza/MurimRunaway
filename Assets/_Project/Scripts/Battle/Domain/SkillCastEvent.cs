@@ -4,12 +4,14 @@ namespace MurimRunaway.Battle.Domain
     public readonly struct SkillCastEvent
     {
         public readonly int CasterId;
+        public readonly int SlotIndex;
         public readonly string SkillId;
         public readonly int TargetId;
 
-        public SkillCastEvent(int casterId, string skillId, int targetId)
+        public SkillCastEvent(int casterId, int slotIndex, string skillId, int targetId)
         {
             CasterId = casterId;
+            SlotIndex = slotIndex;
             SkillId = skillId;
             TargetId = targetId;
         }

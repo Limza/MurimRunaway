@@ -46,7 +46,6 @@ SSOT 본문은 추후 같은 방향으로 정합 권장(루트 [CLAUDE.md](../..
 | # | SSOT 표기 | 충돌 규칙 | 본 가이드 처리 |
 |---|-----------|-----------|----------------|
 | C-1 | `skillSlots: SkillData[]` + `skillCooldowns: float[]` (병렬 배열, 같은 인덱스) | 병렬 배열 + 인덱스 동기화 금지 (`feedback_no_parallel_arrays`) | `SkillSlot { Data; CooldownRemaining; }` 한 컨테이너로 번들 ([§2.4](#24-skillslot--병렬-배열-번들)) |
-| C-2 | `IsInPreferredRange(target.position, ...)` / "position ≤ 25" | 0~100 축에서 적은 멀리 spawn·Player가 진군 → "position"을 절대 좌표로 읽으면 거리 판정이 성립 안 함 | **거리** = `target.Position - caster.Position`로 해석 (Phase 1 `TickEngagementCheck`의 `distance` 계산과 동일 의미) ([§3.3](#33-castingsystem--자동-시전-결정-트리)) |
 
 ---
 
@@ -209,11 +208,11 @@ namespace MurimRunaway.Battle.Engine
                 return;
 
             var distance = nearest.Position - player.Position;
-            if (distance > player.AttackRange)
+            if (distance > player.EngageDistance)
                 return;
 
-            // 큰 deltaTime이 사거리 안쪽으로 밀어넣는 것 방지
-            player.Position = nearest.Position - player.AttackRange;
+            // 큰 deltaTime이 교전 거리 안쪽으로 밀어넣는 것 방지
+            player.Position = nearest.Position - player.EngageDistance;
             player.State = ActorState.Idle;
             context.Phase = BattlePhase.Engage;
         }
@@ -299,24 +298,24 @@ namespace MurimRunaway.Battle.Domain
 
 ### 2.2 `SkillRange` enum
 
-선호 거리대. "Range"는 도메인 어휘(거리대)이므로 접미사 규칙에 안 걸린다.
+타겟 범위. "Range"는 도메인 어휘이므로 접미사 규칙에 안 걸린다.
 
 ### `Scripts/Battle/Domain/Enums/SkillRange.cs`
 
 ```csharp
 namespace MurimRunaway.Battle.Domain
 {
-    /// <summary>무공이 선호하는 적과의 거리대.</summary>
+    /// <summary>무공이 닿는 타겟 범위.</summary>
     public enum SkillRange
     {
-        /// <summary>아직 거리대가 정해지지 않음.</summary>
+        /// <summary>아직 타겟 범위가 정해지지 않음.</summary>
         None = 0,
-        /// <summary>근거리.</summary>
-        Close,
-        /// <summary>중거리.</summary>
-        Mid,
-        /// <summary>원거리.</summary>
-        Long,
+        /// <summary>가장 앞의 살아있는 적 1명.</summary>
+        Single,
+        /// <summary>가장 앞의 살아있는 적과 그 다음 살아있는 적까지 최대 2명.</summary>
+        NearbyPair,
+        /// <summary>화면 안의 모든 살아있는 적.</summary>
+        All,
     }
 }
 ```
@@ -364,7 +363,7 @@ namespace MurimRunaway.Battle.Domain
         [Tooltip("쿨타임 (초)")]
         public float CooldownSec = 1.5f;
 
-        [Tooltip("선호 거리대 — 이 거리대 안에서만 자동 시전")]
+        [Tooltip("사거리 등급 — 해당 거리 이하에서 자동 시전")]
         public SkillRange PreferredRange = SkillRange.None;
 
         [Tooltip("시전 성공 시 획득하는 기세")]
@@ -437,7 +436,7 @@ namespace MurimRunaway.Battle.Domain
         public int StartingMana;
         public int MaxMomentum;
         public float MoveSpeed;
-        public float AttackRange;
+        public float EngageDistance;
 
         public SkillData[] StartingSkills;
     }
@@ -554,7 +553,7 @@ namespace MurimRunaway.Battle.Domain
 ### `Scripts/Battle/Domain/SkillCastEvent.cs`
 
 시전 이벤트 데이터.
-`Action<int, string, int>`처럼 순서로 의미를 외우게 하지 않고, 필드 이름으로 읽히게 둔다.
+`Action<int, int, string, int>`처럼 순서로 의미를 외우게 하지 않고, 필드 이름으로 읽히게 둔다.
 `BattleSnapshot`/`ActorView`처럼 Engine 밖으로 공개되는 읽기 전용 전투 결과 데이터이므로 `Domain`에 둔다.
 `Data`는 `BattleStartData`/`SkillData`처럼 입력값·정적 정의에 붙이고, 시전 성공처럼 플레이 중 한 번 발생한 알림은 `Event`로 부른다.
 
@@ -565,12 +564,14 @@ namespace MurimRunaway.Battle.Domain
     public readonly struct SkillCastEvent
     {
         public readonly int CasterId;
+        public readonly int SlotIndex;
         public readonly string SkillId;
         public readonly int TargetId;
 
-        public SkillCastEvent(int casterId, string skillId, int targetId)
+        public SkillCastEvent(int casterId, int slotIndex, string skillId, int targetId)
         {
             CasterId = casterId;
+            SlotIndex = slotIndex;
             SkillId = skillId;
             TargetId = targetId;
         }
@@ -633,10 +634,8 @@ Phase 2 `IResourceMutator`가 자원 변경 단일 진입점이듯, 시전 실�
 
 SSOT [[BATTLE_DESIGN]] §3 Phase 3 Behaviors 그대로. 매 Tick: ① 쿨다운 감소 → ② 타겟 선택 → ③ 슬롯 0..N-1 순회하며 skip 조건 검사 → ④ 통과한 **첫** 슬롯을 시전하고 break(한 Tick 한 시전).
 
-거리 판정은 [§0.1 C-2](#01-ssot-정합-노트)에 따라 **거리** = `target.Position - caster.Position`로 한다(Phase 1 `EngagementSystem`의 `distance`와 같은 의미).
-
-Engage 진입 직후 Player는 `nearest.Position - attackRange`에 정지하므로, 가장 가까운 적과의 거리는 대략 `attackRange`.
-적이 멀수록 거리가 커진다.
+Phase 3은 아직 데미지가 없으므로 `SkillRange`별 다중 타겟 적용은 하지 않는다.
+`SkillRange`는 Phase 4 데미지 도입 때 타겟 선택 범위로 사용한다.
 
 ### `Scripts/Battle/Engine/Systems/CastingSystem.cs`
 
@@ -676,8 +675,6 @@ namespace MurimRunaway.Battle.Engine
             if (target == null)
                 return;
 
-            var distance = target.Position - player.Position;
-
             // ③ 슬롯 순회 — 통과한 첫 슬롯에서 break
             for (var slotIndex = 0; slotIndex < player.Skills.Length; slotIndex++)
             {
@@ -690,33 +687,10 @@ namespace MurimRunaway.Battle.Engine
                     continue;
                 if (player.Mana < skill.ManaCost)
                     continue;
-                if (!IsInPreferredRange(distance, skill.PreferredRange))
-                    continue;
 
                 // ④ 통과 — 시전하고 한 Tick 종료 (두 무공 동시 발동 금지)
                 _executor.TryCast(player, slotIndex, target);
                 break;
-            }
-        }
-
-        private const float CloseRangeMaxDistance = 25f;
-        private const float MidRangeMaxDistance = 60f;
-        private const float LongRangeMaxDistance = 100f;
-
-        private static bool IsInPreferredRange(float distance, SkillRange range)
-        {
-            switch (range)
-            {
-                case SkillRange.Close:
-                    return distance <= CloseRangeMaxDistance;
-                case SkillRange.Mid:
-                    return distance > CloseRangeMaxDistance
-                        && distance <= MidRangeMaxDistance;
-                case SkillRange.Long:
-                    return distance > MidRangeMaxDistance
-                        && distance <= LongRangeMaxDistance;
-                default:
-                    return false;
             }
         }
     }
@@ -800,7 +774,7 @@ namespace MurimRunaway.Battle.Engine
                 MaxMomentum = data.Player.MaxMomentum,
                 Position = 0f,
                 MoveSpeed = data.Player.MoveSpeed,
-                AttackRange = data.Player.AttackRange,
+                EngageDistance = data.Player.EngageDistance,
                 State = ActorState.Running,
                 SourceId = "player",
                 Skills = data.Player.StartingSkills
@@ -884,7 +858,7 @@ namespace MurimRunaway.Battle.Engine
             slot.CooldownRemaining = skill.CooldownSec;
             GainMomentum(skill.MomentumGainOnCast);
 
-            var skillCast = new SkillCastEvent(caster.Id, skill.Id, target.Id);
+            var skillCast = new SkillCastEvent(caster.Id, slotIndex, skill.Id, target.Id);
             SkillCastPublished?.Invoke(skillCast);
             return true;
         }
@@ -967,29 +941,36 @@ ResourcePanel (기존 — HpBar / ManaBar)
 SkillPanel (RectTransform + Horizontal Layout Group)
  ├ SkillSlot0 (RectTransform)
  │   ├ Icon (Image)            placeholder 단색
- │   ├ CooldownOverlay (Image) 반투명 검정 — 이 높이를 코드가 조절(쿨 차오름)
+ │   ├ CooldownOverlay (Image) 반투명 검정 — Filled/Radial 360 원형 쿨다운
  │   └ NameFlash (TMP_Text)    시전 시 1초 표시 후 숨김
  ├ SkillSlot1 ( "" 복제 )
  └ SkillSlot2 ( "" 복제 )
 ```
 
 - **MomentumBar**: Phase 2 `ManaBar`를 복제(라벨 `MP→MO`, Fill 색 파랑→노랑). Phase 2 [[Completed_Phase_2_Guide]] §3의 ResourceBar/앵커 규칙을 그대로 재사용 — 새 개념 없음.
-- **SkillSlot**: 시작 무공 3개라 슬롯 3칸. `CooldownOverlay`는 Fill과 같은 앵커 원리(한 점 앵커 + 피벗) — 단 위→아래로 줄어드는 표현이라 피벗 `y=1`.
+- **SkillSlot**: 시작 무공 3개라 슬롯 3칸. `CooldownOverlay`는 슬롯 전체를 덮는 Image로 두고, 코드는 `fillAmount`로 남은 쿨다운 비율을 표시한다.
 
 #### 단계별 절차
 
 1. `ResourcePanel` 아래 `ManaBar`를 Ctrl+D → 이름 `MomentumBar`, `Label` 텍스트 `MO`, `Fill` Color 노랑. (Prefab 인스턴스면 슬롯 자동 재해석 — Phase 2 §3.4 함정 노트 참조.)
 2. `Canvas` 우클릭 → UI → Empty, 이름 `SkillPanel`. 앵커 bottom-center. `Add Component → Horizontal Layout Group` (Spacing 8).
 3. `SkillPanel` 아래 UI → Empty `SkillSlot0`. Width/Height 64.
-4. `SkillSlot0` 아래: Image `Icon`(단색 placeholder), Image `CooldownOverlay`(검정 alpha 120; 앵커 top-stretch, 피벗 `y=1`), Text-TMP `NameFlash`(빈 문자열).
+4. `SkillSlot0` 아래: Image `Icon`(단색 placeholder), Image `CooldownOverlay`(검정 alpha 120; Source Image에 임의의 흰색 Sprite 지정, 앵커 stretch-stretch, Type=Filled, Fill Method=Radial 360, Fill Origin=Top), Text-TMP `NameFlash`(빈 문자열).
 5. `SkillSlot0`를 `Assets/_Project/Prefabs/Battle/`로 드래그 → Prefab. `SkillSlot1`/`SkillSlot2`는 Prefab 인스턴스로 2개 더 배치.
 
 > [!note]
 > Phase 2 placeholder 수준. 정교한 슬롯 UI(아이콘·테두리·등급)는 Phase 14. Phase 3은 "쿨이 도는 게 보이고, 시전되면 이름이 1초 뜬다"까지.
+>
+> Unity `Image`의 `Type=Filled` 항목은 `Source Image`가 `None`이면 보이지 않는다.
+> `CooldownOverlay`에 우선 아무 흰색 Sprite나 넣고 Color를 검정 반투명으로 바꾼다.
 
 ### 4.2 `BattleSceneController` — 슬롯 쿨 게이지 + 시전 이름
 
-추가 슬롯 + `HandleSnapshot` 분기(쿨 게이지) + `SkillCastPublished` 구독(이름 1초 표시). 시전 이름은 코루틴으로 1초 후 숨김.
+추가 슬롯 + `HandleSnapshot` 분기(원형 쿨다운) + `SkillCastPublished` 구독(이름 1초 표시). 시전 이름은 코루틴으로 1초 후 숨김.
+
+`HandleSnapshot`은 새 표시 목표만 저장한다.
+마커 이동과 쿨타임 게이지는 `Update()`에서 마지막 스냅샷 기준으로 매 프레임 그린다.
+Engine Tick은 20Hz로 유지하고, View만 자기 프레임에 보간 표시한다.
 
 ```csharp
 public sealed class BattleSceneController : MonoBehaviour
@@ -997,8 +978,17 @@ public sealed class BattleSceneController : MonoBehaviour
     // ... 기존 [SerializeField] 슬롯 (counter/gauge/markers/hpBar/manaBar) 유지 ...
 
     [SerializeField] private ResourceBar _momentumBar;
+    [SerializeField] private float _snapshotIntervalSeconds = 0.05f;
     [SerializeField] private RectTransform[] _skillCooldownOverlays; // 슬롯 i의 CooldownOverlay
     [SerializeField] private TMP_Text[] _skillNameFlashes;           // 슬롯 i의 NameFlash
+
+    private Image[] _skillCooldownOverlayImages;
+    private Coroutine[] _skillNameFlashRoutines;
+    private SkillSlotView[] _playerSkillSnapshot;
+    private float[] _markerStartPositions;
+    private float[] _markerTargetPositions;
+    private float _lastSnapshotTime;
+    private bool _hasSnapshot;
 
     [VContainer.Inject]
     public void Construct(BattleEngine engine)
@@ -1010,6 +1000,9 @@ public sealed class BattleSceneController : MonoBehaviour
     {
         _engine.SnapshotPublished += HandleSnapshot;
         _engine.SkillCastPublished += HandleSkillCast;
+        _skillNameFlashRoutines = new Coroutine[_skillNameFlashes.Length];
+        // ... CooldownOverlay Image 캐싱 + Filled/Radial 설정 ...
+        // ... marker 보간용 배열 초기화 ...
         // ... 기존 Start() 본문 유지 (worldMax/마커/Setup/Start) ...
     }
 
@@ -1026,11 +1019,17 @@ public sealed class BattleSceneController : MonoBehaviour
     {
         _counterText.text = $"Tick: {snapshot.TickIndex}  Phase: {snapshot.Phase}";
 
+        var isFirstSnapshot = !_hasSnapshot;
         var gaugeWidth = _gauge.rect.width;
         foreach (var actor in snapshot.Actors)
         {
-            var marker = actor.IsPlayer ? _playerMarker : _enemyMarkers[actor.Id - 1];
-            marker.anchoredPosition = new Vector2(actor.Position / _worldMax * gaugeWidth, 0f);
+            var markerIndex = actor.Id;
+            var marker = GetMarker(actor);
+            var markerTargetPosition = actor.Position / _worldMax * gaugeWidth;
+            _markerStartPositions[markerIndex] = isFirstSnapshot
+                ? markerTargetPosition
+                : marker.anchoredPosition.x;
+            _markerTargetPositions[markerIndex] = markerTargetPosition;
 
             if (!actor.IsPlayer)
                 continue;
@@ -1038,33 +1037,87 @@ public sealed class BattleSceneController : MonoBehaviour
             _hpBar.SetValue(actor.Hp, actor.MaxHp);
             _manaBar.SetValue(actor.Mana, actor.MaxMana);
             _momentumBar.SetValue(actor.Momentum, actor.MaxMomentum);
+            _playerSkillSnapshot = actor.Skills;
+        }
 
-            for (var slotIndex = 0; slotIndex < actor.Skills.Length; slotIndex++)
-            {
-                var slotView = actor.Skills[slotIndex];
-                var coolRatio = slotView.CooldownSec <= 0f
-                    ? 0f
-                    : slotView.CooldownRemaining / slotView.CooldownSec;
-                var overlay = _skillCooldownOverlays[slotIndex];
-                var size = overlay.sizeDelta;
-                size.y = overlay.rect.height * coolRatio; // 가이드 표기 — 실제론 부모 높이 기준
-                overlay.sizeDelta = size;
-            }
+        _lastSnapshotTime = Time.time;
+        _hasSnapshot = true;
+        UpdateMarkerPositions();
+        UpdateSkillCooldowns();
+    }
+
+    private void Update()
+    {
+        if (!_hasSnapshot)
+            return;
+
+        UpdateMarkerPositions();
+        UpdateSkillCooldowns();
+    }
+
+    private RectTransform GetMarker(ActorView actor)
+    {
+        return actor.IsPlayer ? _playerMarker : _enemyMarkers[actor.Id - 1];
+    }
+
+    private void UpdateMarkerPositions()
+    {
+        var snapshotRatio = Mathf.Clamp01((Time.time - _lastSnapshotTime) / _snapshotIntervalSeconds);
+        _playerMarker.anchoredPosition = GetMarkerPosition(0, snapshotRatio);
+
+        for (var enemyIndex = 0; enemyIndex < _enemyMarkers.Length; enemyIndex++)
+        {
+            var markerIndex = enemyIndex + 1;
+            _enemyMarkers[enemyIndex].anchoredPosition = GetMarkerPosition(markerIndex, snapshotRatio);
+        }
+    }
+
+    private Vector2 GetMarkerPosition(int markerIndex, float snapshotRatio)
+    {
+        var markerPosition = Mathf.Lerp(
+            _markerStartPositions[markerIndex],
+            _markerTargetPositions[markerIndex],
+            snapshotRatio);
+
+        return new Vector2(markerPosition, 0f);
+    }
+
+    private void UpdateSkillCooldowns()
+    {
+        if (_playerSkillSnapshot == null)
+            return;
+
+        var elapsedSinceSnapshot = Time.time - _lastSnapshotTime;
+        for (var slotIndex = 0; slotIndex < _playerSkillSnapshot.Length; slotIndex++)
+        {
+            var slotView = _playerSkillSnapshot[slotIndex];
+            var displayedCooldownRemaining = Mathf.Max(
+                0f,
+                slotView.CooldownRemaining - elapsedSinceSnapshot);
+            var cooldownRatio = slotView.CooldownSec <= 0f
+                ? 0f
+                : displayedCooldownRemaining / slotView.CooldownSec;
+            var overlayImage = _skillCooldownOverlayImages[slotIndex];
+            overlayImage.fillAmount = cooldownRatio;
+            overlayImage.enabled = cooldownRatio > 0f;
         }
     }
 
     private void HandleSkillCast(SkillCastEvent skillCast)
     {
-        // 시전 슬롯을 skillId로 역추적하지 않고, 가장 단순하게: 시전된 무공 이름을 공통 라벨에 1초.
-        StopAllCoroutines();
-        StartCoroutine(FlashSkillName(skillCast.SkillId));
+        var slotIndex = skillCast.SlotIndex;
+        if (_skillNameFlashRoutines[slotIndex] != null)
+            StopCoroutine(_skillNameFlashRoutines[slotIndex]);
+
+        _skillNameFlashRoutines[slotIndex] = StartCoroutine(FlashSkillName(slotIndex, skillCast.SkillId));
     }
 
-    private System.Collections.IEnumerator FlashSkillName(string skillId)
+    private System.Collections.IEnumerator FlashSkillName(int slotIndex, string skillId)
     {
-        _skillNameFlashes[0].text = skillId; // 번역 문구 미연결 — id 그대로 표시
+        _skillNameFlashes[slotIndex].text = skillId;
         yield return new WaitForSeconds(1f);
-        _skillNameFlashes[0].text = string.Empty;
+        _skillNameFlashes[slotIndex].text = string.Empty;
+        _skillNameFlashRoutines[slotIndex] = null;
     }
 }
 ```
@@ -1076,20 +1129,19 @@ public sealed class BattleSceneController : MonoBehaviour
 > 슬롯 3칸 각각 쿨이 따로 도므로 `ResourceBar` 한 종으로는 부족 → 오버레이 RectTransform을 직접 만진다.
 > 정식 슬롯 컴포넌트화는 Phase 14.
 >
-> **이름 표시를 슬롯 0 라벨에 몰아주는 이유**
+> **이름 표시는 이벤트의 `SlotIndex`를 따른다**
 >
-> Phase 3 PlayMode 확인 기준은 "시전되면 이름이 1초 뜬다"뿐(SSOT Acceptance).
-> 어느 슬롯이 떴는지 슬롯별로 보여주는 건 Phase 14 폴리시.
->
-> YAGNI — `skillId`로 슬롯을 역추적하는 코드를 지금 넣지 않는다.
+> 시전 슬롯은 Engine이 이미 알고 있으므로 `SkillCastEvent`에 같이 싣는다.
+> View가 `skillId`로 슬롯을 역추적하지 않는다.
+> 코루틴도 전체 정지가 아니라 해당 슬롯의 플래시만 갱신한다.
 
 ### 4.3 Inspector 연결
 
 | 슬롯 | 연결할 대상 |
 |------|------------|
 | `_momentumBar` | `ResourcePanel/MomentumBar`의 `ResourceBar` |
-| `_skillCooldownOverlays` | Size=3, 각 `SkillSlotN/CooldownOverlay` (RectTransform) |
-| `_skillNameFlashes` | Size=3, 각 `SkillSlotN/NameFlash` (TMP_Text) — Phase 3은 [0]만 사용 |
+| `_skillCooldownOverlays` | Size=3, 각 `SkillSlotN/CooldownOverlay` (RectTransform, Image 포함) |
+| `_skillNameFlashes` | Size=3, 각 `SkillSlotN/NameFlash` (TMP_Text) |
 
 `PlayerStartData.StartingSkills`는 씬에서 주입한다 — `BattleSceneController`에 `[SerializeField] private SkillData[] _startingSkills;`를 더하고 `Setup`의 `Player = new PlayerStartData { ..., StartingSkills = _startingSkills }`로 넘긴다.
 
@@ -1101,9 +1153,13 @@ SkillData SO 3개(§4.4)를 Inspector 배열에 드래그.
 
 | 파일 | Id | Kind | ManaCost | CooldownSec | PreferredRange | 의도 |
 |------|----|----------|----------|-------------|----------------|------|
-| `tae_in_jang` | `tae_in_jang` | Technique | 5 | 1.5 | Close | 근접 주력 |
-| `cheonha_36_geom` | `cheonha_36_geom` | Technique | 12 | 3.0 | Mid | 중거리 |
-| `simbeop_unki` | `simbeop_unki` | Focus | 8 | 5.0 | Close | 심법(효과는 Phase 4) |
+| `tae_in_jang` | `tae_in_jang` | Technique | 5 | 1.5 | Single | 선두 적 1명 |
+| `cheonha_36_geom` | `cheonha_36_geom` | Technique | 12 | 3.0 | NearbyPair | 선두 적과 다음 적까지 |
+| `simbeop_unki` | `simbeop_unki` | Focus | 8 | 5.0 | None | 심법(Phase 3에서는 시전 확인 대상 아님) |
+
+> [!note]
+> 심법은 적과의 거리대보다 캐릭터 버프에 가깝다.
+> 방어도, 공격력, 내공 상승 같은 효과를 다룰 때 `PreferredRange = None` 처리와 자동 시전 조건을 다시 본다.
 
 `NameKey`는 `skill.<id>.name` 규약으로 채우되 Phase 3엔 번역 문구가 아직 연결되지 않아 화면엔 `Id`가 뜬다(§4.2).
 
@@ -1142,152 +1198,131 @@ Assert.AreEqual(80f, last.Actors[0].Position, 1e-4f);     // 그대로
 >
 > 기대값이 새 사양을 따라가는 것 — 회귀 추적의 정상 동작.
 
-### 5.1 `CastingSystemPriorityTests.cs` — 슬롯 우선순위 + 거리 판정
+### 5.1 `CastingSystemPriorityTests.cs` — 슬롯 우선순위
 
-SSOT Acceptance: *"슬롯[태인장(Close), 천하삼십육검(Mid)] 적이 Mid 거리면 천하삼십육검만 시전."*
-
-거리 = `target.Position - player.Position`. 적 spawn=100, `AttackRange=50` → Engage 정지 시 `player.Position = 100 - 50 = 50`, 거리=50 → **Mid 거리대**(25<50≤60). Close 무공은 skip, Mid 무공만 시전된다.
+SSOT Acceptance: *"슬롯[태인장(Single), 천하삼십육검(NearbyPair)]이 모두 조건을 통과하면 슬롯 순서대로 태인장이 먼저 시전."*
 
 ```csharp
 using System.Collections.Generic;
 using NUnit.Framework;
 using MurimRunaway.Battle.Domain;
-using MurimRunaway.Battle.Engine;
-using UnityEngine;
 
 namespace MurimRunaway.Battle.Tests
 {
     public class CastingSystemPriorityTests
     {
         [Test]
-        public void 적이_Mid_거리면_Close무공은_건너뛰고_Mid무공만_시전된다()
+        public void 서로_다른_범위_무공도_조건_충족이면_슬롯0이_먼저_시전된다()
         {
             var castSkillIds = new List<string>();
-            var engine = CreateEngine(
-                attackRange: 50f, enemySpawn: 100f,
-                MakeSkill("tae_in_jang", SkillRange.Close, manaCost: 5),
-                MakeSkill("cheonha", SkillRange.Mid, manaCost: 5));
+            var tick = new MockTickService();
+            var engine = BattleTestFactory.CreateEngine(
+                tick,
+                engageDistance: 50f,
+                enemies: new[] { BattleTestFactory.CreateEnemy("e", 100f) },
+                skills: new[]
+                {
+                    BattleTestFactory.CreateSkill(
+                        "tae_in_jang",
+                        SkillRange.Single,
+                        manaCost: 5,
+                        momentumGainOnCast: 1),
+                    BattleTestFactory.CreateSkill(
+                        "cheonha",
+                        SkillRange.NearbyPair,
+                        manaCost: 5,
+                        momentumGainOnCast: 1),
+                });
             engine.SkillCastPublished += skillCast => castSkillIds.Add(skillCast.SkillId);
 
-            new MockTickService(); // (엔진 내부 tick으로 펌프 — CreateEngine 참조)
-            PumpUntilEngaged(engine);
+            engine.Start();
+            tick.PumpTicks(220);
 
-            Assert.IsNotEmpty(castSkillIds);
-            CollectionAssert.DoesNotContain(castSkillIds, "tae_in_jang");
-            Assert.AreEqual("cheonha", castSkillIds[0]);
+            Assert.AreEqual("tae_in_jang", castSkillIds[0]);
         }
 
-        // 슬롯 0 우선순위: 둘 다 같은 거리대/조건이면 슬롯 0이 먼저, 한 Tick 한 시전.
+        // 슬롯 0 우선순위: 둘 다 조건을 충족하면 슬롯 0이 먼저, 한 Tick 한 시전.
         [Test]
         public void 두_무공이_모두_조건_충족이면_슬롯0이_먼저_시전된다()
         {
             var castSkillIds = new List<string>();
-            var engine = CreateEngine(
-                attackRange: 50f, enemySpawn: 100f,
-                MakeSkill("first", SkillRange.Mid, manaCost: 5),
-                MakeSkill("second", SkillRange.Mid, manaCost: 5));
+            var tick = new MockTickService();
+            var engine = BattleTestFactory.CreateEngine(
+                tick,
+                engageDistance: 50f,
+                enemies: new[] { BattleTestFactory.CreateEnemy("e", 100f) },
+                skills: new[]
+                {
+                    BattleTestFactory.CreateSkill(
+                        "first",
+                        SkillRange.NearbyPair,
+                        manaCost: 5,
+                        momentumGainOnCast: 1),
+                    BattleTestFactory.CreateSkill(
+                        "second",
+                        SkillRange.NearbyPair,
+                        manaCost: 5,
+                        momentumGainOnCast: 1),
+                });
             engine.SkillCastPublished += skillCast => castSkillIds.Add(skillCast.SkillId);
 
-            PumpUntilEngaged(engine);
+            engine.Start();
+            tick.PumpTicks(220);
 
             Assert.AreEqual("first", castSkillIds[0]);
-        }
-
-        private static BattleEngine CreateEngine(
-            float attackRange, float enemySpawn, params SkillData[] skills)
-        {
-            var tick = new MockTickService();
-            var engine = new BattleEngine(tick, new RngService());
-
-            var enemy = ScriptableObject.CreateInstance<EnemyData>();
-            enemy.Id = "e";
-            enemy.MaxHp = 30;
-            enemy.SpawnPosition = enemySpawn;
-
-            engine.Setup(new BattleStartData
-            {
-                Seed = 1,
-                Player = new PlayerStartData
-                {
-                    MaxHp = 50, MoveSpeed = 5f, AttackRange = attackRange,
-                    MaxMana = 100, StartingMana = 50, MaxMomentum = 10,
-                    StartingSkills = skills,
-                },
-                Enemies = new[] { enemy },
-            });
-            engine.Start();
-            EngineTickPump.Bind(engine, tick); // 헬퍼: tick을 엔진에 연결해 PumpUntilEngaged가 돌림
-            return engine;
-        }
-
-        private static void PumpUntilEngaged(BattleEngine engine)
-        {
-            // 0→50 진군 = 50/5 = 10초 = 0.05초 틱 200틱 + Engage 후 시전 여유 몇 틱
-            EngineTickPump.Pump(engine, 220);
-        }
-
-        private static SkillData MakeSkill(string id, SkillRange range, int manaCost)
-        {
-            var skill = ScriptableObject.CreateInstance<SkillData>();
-            skill.Id = id;
-            skill.Kind = SkillKind.Technique;
-            skill.ManaCost = manaCost;
-            skill.CooldownSec = 1.5f;
-            skill.PreferredRange = range;
-            skill.MomentumGainOnCast = 1;
-            return skill;
         }
     }
 }
 ```
 
 > [!note]
-> `EngineTickPump`는 테스트가 `MockTickService`를 엔진에 물려 N틱 펌프하는 한 줄짜리 헬퍼다.
-> Phase 1/2 테스트는 `tick.PumpTicks(n)`을 직접 썼다 — 같은 패턴이면 헬퍼 없이 `tick`을 그대로 들고 펌프해도 된다.
->
-> 위 코드는 가독성용 표기이니, 실제 작성 시 Phase 1 테스트(`BattleEngineApproachTests`)의 `var tick = new MockTickService(); ...; tick.PumpTicks(320);` 패턴을 그대로 따르고 `engine.SkillCastPublished`만 추가로 구독하면 된다(반복 패턴 통일 — `feedback_guide_code_rigor`).
+> Phase 1/2 테스트는 `tick.PumpTicks(n)`을 직접 썼다.
+> Phase 3 테스트도 같은 패턴을 따른다.
+> `BattleTestFactory.CreateEngine`이 같은 `tick`을 엔진에 넘기고, 테스트 본문이 `engine.Start()`와 `tick.PumpTicks(220)`을 직접 호출한다(반복 패턴 통일 — `feedback_guide_code_rigor`).
 
 ### 5.2 `CastingDeterminismTests.cs` — `SkillCastPublished` 시퀀스 결정성
 
 SSOT I-3.4 / Acceptance: *"같은 시드 + 같은 슬롯/적 구성 → SkillCastPublished 시퀀스 동일."* 같은 입력으로 두 번 돌려 `(tick에서의 skillId, targetId)` 시퀀스가 byte-equal인지.
 
 ```csharp
-[Test]
-public void 같은_입력이면_SkillCastPublished_시퀀스가_완전히_동일하다()
+using System.Collections.Generic;
+using NUnit.Framework;
+using MurimRunaway.Battle.Domain;
+
+namespace MurimRunaway.Battle.Tests
 {
-    var runA = RunAndCaptureCasts(seed: 7);
-    var runB = RunAndCaptureCasts(seed: 7);
-
-    CollectionAssert.AreEqual(runA, runB); // 순서·내용 완전 일치
-}
-
-private static List<string> RunAndCaptureCasts(int seed)
-{
-    var tick = new MockTickService();
-    var engine = new BattleEngine(tick, new RngService());
-    var casts = new List<string>();
-    engine.SkillCastPublished += skillCast =>
-        casts.Add($"{skillCast.SkillId}->{skillCast.TargetId}");
-
-    var enemy = ScriptableObject.CreateInstance<EnemyData>();
-    enemy.Id = "e";
-    enemy.MaxHp = 30;
-    enemy.SpawnPosition = 100f;
-
-    engine.Setup(new BattleStartData
+    public class CastingDeterminismTests
     {
-        Seed = seed,
-        Player = new PlayerStartData
+        [Test]
+        public void 같은_입력이면_SkillCastPublished_시퀀스가_완전히_동일하다()
         {
-            MaxHp = 50, MoveSpeed = 5f, AttackRange = 50f,
-            MaxMana = 100, StartingMana = 50, MaxMomentum = 10,
-            StartingSkills = new[] { MakeSkill("cheonha", SkillRange.Mid, 5) },
-        },
-        Enemies = new[] { enemy },
-    });
-    engine.Start();
-    tick.PumpTicks(400);
-    return casts;
+            var runA = RunAndCaptureCasts(seed: 7);
+            var runB = RunAndCaptureCasts(seed: 7);
+
+            CollectionAssert.AreEqual(runA, runB); // 순서·내용 완전 일치
+        }
+
+        private static List<string> RunAndCaptureCasts(int seed)
+        {
+            var tick = new MockTickService();
+            var engine = BattleTestFactory.CreateEngine(
+                tick,
+                seed: seed,
+                engageDistance: 50f,
+                enemies: new[] { BattleTestFactory.CreateEnemy("e", 100f) },
+                skills: new[]
+                {
+                    BattleTestFactory.CreateSkill("cheonha", SkillRange.NearbyPair, manaCost: 5),
+                });
+            var casts = new List<string>();
+            engine.SkillCastPublished += skillCast =>
+                casts.Add($"{skillCast.SkillId}->{skillCast.TargetId}");
+
+            engine.Start();
+            tick.PumpTicks(400);
+            return casts;
+        }
+    }
 }
 ```
 
@@ -1301,39 +1336,51 @@ private static List<string> RunAndCaptureCasts(int seed)
 Phase 2 `ResourceMutatorTests`에 기세 2케이스 추가(Mana 케이스 패턴 그대로).
 
 ```csharp
-[Test]
-public void 기세가_부족하면_SpendMomentum은_false를_반환하고_값은_그대로다()
+using NUnit.Framework;
+using MurimRunaway.Battle.Domain;
+using MurimRunaway.Battle.Engine;
+
+namespace MurimRunaway.Battle.Tests
 {
-    var engine = CreateEngine(); // Momentum 시작 0
-    IResourceMutator mutator = engine;
+    public class ResourceMutatorTests
+    {
+        [Test]
+        public void 기세가_부족하면_SpendMomentum은_false를_반환하고_값은_그대로다()
+        {
+            var engine = BattleTestFactory.CreateEngine(); // Momentum 시작 0
+            IResourceMutator mutator = engine;
 
-    var ok = mutator.SpendMomentum(1); // 시작 0, 1 시도
+            var ok = mutator.SpendMomentum(1); // 시작 0, 1 시도
+            Assert.IsFalse(ok);
 
-    Assert.IsFalse(ok);
-    BattleSnapshot snapshot = default;
-    engine.SnapshotPublished += s => snapshot = s;
-    engine.Start();
-    Assert.AreEqual(0, snapshot.Actors[0].Momentum);
-}
+            BattleSnapshot snapshot = default;
+            engine.SnapshotPublished += s => snapshot = s;
+            engine.Start();
 
-[Test]
-public void GainMomentum은_maxMomentum으로_클램프된다()
-{
-    var engine = CreateEngine();
-    IResourceMutator mutator = engine;
+            Assert.AreEqual(0, snapshot.Actors[0].Momentum);
+        }
 
-    mutator.GainMomentum(80); // 0 + 80 = 80 → maxMomentum 10으로 클램프
+        [Test]
+        public void GainMomentum은_maxMomentum으로_클램프된다()
+        {
+            var engine = BattleTestFactory.CreateEngine();
+            IResourceMutator mutator = engine;
 
-    BattleSnapshot snapshot = default;
-    engine.SnapshotPublished += s => snapshot = s;
-    engine.Start();
-    Assert.AreEqual(10, snapshot.Actors[0].Momentum);
+            mutator.GainMomentum(80); // 0 + 80 = 80 → maxMomentum 10으로 클램프
+
+            BattleSnapshot snapshot = default;
+            engine.SnapshotPublished += s => snapshot = s;
+            engine.Start();
+
+            Assert.AreEqual(10, snapshot.Actors[0].Momentum);
+        }
+    }
 }
 ```
 
 > [!note]
 > `PlayerStartData`는 기본값을 갖지 않는다.
-> 테스트 헬퍼의 `PlayerStartData`에 `MaxMomentum = 10`을 명시한다(가이드↔산출물 양방향 확인).
+> `BattleTestFactory`의 `PlayerStartData`에 `MaxMomentum = 10`을 명시한다(가이드↔산출물 양방향 확인).
 >
 > 테스트 메서드명 한글 시나리오 — 클래스·필드는 영문(`feedback_test_naming`).
 
@@ -1343,13 +1390,13 @@ public void GainMomentum은_maxMomentum으로_클램프된다()
 
 [[BATTLE_DESIGN]] §3 Phase 3 Acceptance:
 
-- [ ] EditMode: 슬롯[Close, Mid] + 적이 Mid 거리 → Mid 무공만 시전 (§5.1).
-- [ ] EditMode: 내공 부족 시 시전 X, 충전(테스트에선 `GainMana`로 강제) 후 다음 Tick에 시전. (§5.1 변형 — manaCost를 시작 내공보다 크게 두고 1케이스 추가.)
-- [ ] EditMode: 결정성 — 같은 시드/슬롯/적 → `SkillCastPublished` 시퀀스 동일 (§5.2).
-- [ ] EditMode: 기세 부족 시 실패 + 값 유지, maxMomentum 초과 방지 (§5.3, I-3.x 보강).
-- [ ] EditMode: Phase 1 회귀 2종(Approach/NearestEnemy) 기대값 `Engage`로 갱신 후 통과 (§5.0).
-- [ ] PlayMode: Engage 진입 후 슬롯 위 쿨 게이지가 돌고, 시전 시 무공 id가 1초 표시 (§4.5).
-- [ ] PlayMode: VContainer 주입 정상 — Play 시 NullReferenceException 없이 진군→Engage 재현, 기세 게이지 표시.
+- [x] EditMode: 슬롯[Single, NearbyPair] 모두 조건 충족 → 슬롯 0 무공 먼저 시전 (§5.1).
+- [x] EditMode: 내공 부족 시 시전 X, 충전(테스트에선 `GainMana`로 강제) 후 다음 Tick에 시전. (§5.1 변형 — manaCost를 시작 내공보다 크게 두고 1케이스 추가.)
+- [x] EditMode: 결정성 — 같은 시드/슬롯/적 → `SkillCastPublished` 시퀀스 동일 (§5.2).
+- [x] EditMode: 기세 부족 시 실패 + 값 유지, maxMomentum 초과 방지 (§5.3, I-3.x 보강).
+- [x] EditMode: Phase 1 회귀 2종(Approach/NearestEnemy) 기대값 `Engage`로 갱신 후 통과 (§5.0).
+- [x] PlayMode: Engage 진입 후 슬롯 위 쿨 게이지가 돌고, 시전 시 해당 슬롯에 무공 id가 1초 표시 (§4.5).
+- [x] PlayMode: VContainer 주입 정상 — Play 시 NullReferenceException 없이 진군→Engage 재현, 기세 게이지 표시.
 
 > [!note]
 > 2번째 항목(내공 부족→충전 후 시전)은 SSOT Acceptance 원문.
@@ -1373,8 +1420,8 @@ public void GainMomentum은_maxMomentum으로_클램프된다()
   리뷰 시 `\.(Mana|Momentum)\s*[-+]?=` grep이 `BattleEngine`의 mutator 메서드 밖에 나타나면 위반(Phase 2 함정 노트 연장).
 - **한 Tick에 두 무공 시전** — 슬롯 순회에서 `break` 누락 시 한 Tick에 여러 슬롯이 발동.
   SSOT I-3.1 위반 + Phase 5 강공 동시발동 정책과 불일치. `break` 필수.
-- **거리 판정에 절대 좌표 사용** — `IsInPreferredRange`에 `target.Position`을 그대로 넘기면 적 spawn=100이 항상 Long 밖(>100 아님이지만 의미 붕괴).
-  반드시 `target.Position - player.Position`(거리). §0.1 C-2.
+- **`SkillRange`를 거리 게이트로 재해석** — Phase 3에서 `SkillRange`는 시전 가능 거리 조건이 아니라 Phase 4 타겟 범위 예약값이다.
+  자동 시전 조건에 다시 거리 게이트를 넣으면 `EngageDistance`가 큰 빌드에서 `Single` 무공이 죽는다.
 - **`Resolve` 기대 테스트 방치** — §5.0 안 하면 Phase 1 테스트 2개가 빨갛게 남아 Acceptance를 못 닫는다.
   회귀는 "발견 즉시 기대값 동기화".
 - **`SkillEffect` 빈 타입 미리 생성** — "TryCast가 effects를 참조하니까" 식으로 빈 클래스 만들지 말 것. Phase 3엔 효과가 없다(YAGNI). Phase 4에 데미지와 함께.
