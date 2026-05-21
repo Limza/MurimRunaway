@@ -8,8 +8,8 @@
 > 단, 본 Phase는 SSOT 표기와 코드 컨벤션이 충돌하는 지점이 2곳 있다 ([§0.1 SSOT 정합 노트](#01-ssot-정합-노트)) — 가이드는 컨벤션을 따르고 그 자리에 노트를 둔다.
 >
 > **함께 보기**:
-> - [[Phase_3_Learned]] — 본 Phase에서 등장한 개념 정리.
-> - [[Phase_3_AssetQueue]] — 병렬 에셋 큐(Track A).
+> - [[Completed_Phase_3_Learned]] — 본 Phase에서 등장한 개념 정리.
+> - [[Completed_Phase_3_AssetQueue]] — 병렬 에셋 큐(Track A).
 > - [[Completed_Phase_2_Learned]] §5 — ActorView 분리 트리거 판단 근거를 본 Phase에서 다시 참조한다.
 >
 > **본 Phase의 무게**: M3 = **오토배틀의 코어 그 자체**(MILESTONES 부담 M).

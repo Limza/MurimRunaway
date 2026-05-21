@@ -62,7 +62,7 @@ Track A에서 **새로 생성해야 할 필수 이미지 에셋은 현재 없음
 
 ### 3.1 무공 슬롯 아이콘 (Phase 3 코드가 쓰는 것)
 
-Phase 3 [[Phase_3_Guide]] §4 View의 슬롯 아이콘은 **단색 placeholder**로 Acceptance를 통과시킨다 — Track A의 정식 전투 아이콘과 별개다.
+Phase 3 [[Completed_Phase_3_Guide]] §4 View의 슬롯 아이콘은 **단색 placeholder**로 Acceptance를 통과시킨다 — Track A의 정식 전투 아이콘과 별개다.
 
 | 항목 | 처리 방식 | 메모 |
 |------|-----------|------|
