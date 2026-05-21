@@ -199,7 +199,7 @@ public interface IBattleEngine
     void Setup(BattleStartData data, int seed);
     void Start();
     event Action<BattleSnapshot> SnapshotPublished;   // 매 틱 끝
-    event Action<BattleResult>   OnResult;     // 종료 시 1회
+    event Action<BattleResult>   BattleResultPublished;     // 종료 시 1회
 }
 ```
 
@@ -455,7 +455,7 @@ ActorView 확장 (Player 한정):
    - cooldowns[i] = skill.cooldownSec.
    - GainMomentum(skill.momentumGainOnCast).
    - skill.effects 적용 (Phase 4에서 정의).
-   - `OnSkillCast(actorId, slotIndex, skillId, targetId)` 이벤트 발생.
+   - `SkillCastPublished(actorId, slotIndex, skillId, targetId)` 이벤트 발생.
 
 > [!note]
 > **루프 제약**: 한 Tick에 한 슬롯만 시전 (위 break). 두 스킬 동시 발동 금지. 이는 §6.4 SSOT의 "강공 동시 발동 정책" 결정과 정합.
@@ -470,14 +470,14 @@ public interface ISkillExecutor
 }
 
 // Engine 이벤트
-event Action<SkillCastEvent> OnSkillCast;
+event Action<SkillCastEvent> SkillCastPublished;
 ```
 
 **Invariants**:
 - I-3.1: 한 Tick에 한 actor당 시전 1회 이하.
 - I-3.2: 시전이 일어났다면 mana는 정확히 `manaCost` 만큼 감소했다.
 - I-3.3: 쿨다운 중인 스킬은 시전되지 않는다 (cooldowns[i] > 0).
-- I-3.4: 결정성: 같은 seed/BattleStartData/SkillSlots → 같은 OnSkillCast 시퀀스.
+- I-3.4: 결정성: 같은 seed/BattleStartData/SkillSlots → 같은 SkillCastPublished 시퀀스.
 
 **Edge**:
 - 슬롯 순서가 우선순위다 — 사용자가 슬롯 순서로 우선순위를 표현한다.
@@ -487,7 +487,7 @@ event Action<SkillCastEvent> OnSkillCast;
 **Acceptance**:
 - [ ] EditMode: 슬롯[태인장(Single), 천하삼십육검(NearbyPair)]이 모두 조건을 통과하면 슬롯 순서대로 태인장이 먼저 시전.
 - [ ] EditMode: 내공 부족 시 시전 X, 충전 후 다음 Tick에 시전.
-- [ ] EditMode: 결정성 — 같은 시드 + 같은 슬롯/적 구성 → OnSkillCast 시퀀스 동일.
+- [ ] EditMode: 결정성 — 같은 시드 + 같은 슬롯/적 구성 → SkillCastPublished 시퀀스 동일.
 - [ ] PlayMode: 슬롯 위에 쿨 게이지 + 시전 시 해당 슬롯에 skill 이름이 1초 표시.
 
 ---
@@ -497,6 +497,8 @@ event Action<SkillCastEvent> OnSkillCast;
 **Goal**: 적 일반 공격(deterministic cadence) → 플레이어 HP 감소. 스킬 효과(데미지) 적용 → 적 HP 감소 → 사망. 전체 승/패 판정.
 
 **Non-goals**: 강공·오의·회피. 회피는 Phase 9에서 도입.
+회복·버프·디버프도 본 Phase에서는 만들지 않는다.
+데미지 보정용 resolver 인터페이스는 Phase 5/6의 매트릭스나 Phase 9의 회피처럼 두 번째 규칙이 생길 때 추출한다.
 
 **Data (추가)**:
 
@@ -505,25 +507,44 @@ event Action<SkillCastEvent> OnSkillCast;
 |------|------|--------|------|
 | normalAttackDamage | int | 3 | 일반 공격 데미지 |
 | normalAttackPeriod | float | 2.5 | 공격 주기 (초) |
-| normalAttackRange | SkillRange | Single | 타겟 범위 |
+| engageDistance | float | 20 | 플레이어가 이 거리 안에 있으면 일반 공격 가능 |
 
-`SkillEffect` (Domain — sealed class 다형성):
+`SkillData` 확장:
+| 필드 | 타입 | 디폴트 | 설명 |
+|------|------|--------|------|
+| effects | SkillEffect[] | empty | 발동 시 적용 효과. 본 Phase에서는 `DamageEffect`만 사용 |
+
+`SkillEffect`:
 - `DamageEffect { int amount }`
-- `HealEffect { int amount }`  (본 Phase에선 미사용, 정의만)
-- `BuffEffect`, `DebuffEffect` (Phase 6+)
+- `HealEffect`, `BuffEffect`, `DebuffEffect`는 실제 동작을 넣는 Phase에서 정의
 
-`Actor` 확장:
+**Content assets**:
+- 본 Phase에서는 새 무공·새 적 에셋을 따로 만들지 않는다.
+- 기존 확인용 `SkillData` 에셋에는 `DamageEffect`를 채우고, 기존 `EnemyData` 에셋에는 일반 공격 값을 채운다.
+
+`EnemyActor` 확장:
 | 필드 추가 | 타입 | 디폴트 | 설명 |
 |----------|------|--------|------|
+| normalAttackDamage | int | 3 | 런타임 일반 공격 데미지 |
+| normalAttackPeriod | float | 2.5 | 런타임 일반 공격 주기 |
 | normalAttackCooldown | float | 0 | 다음 공격까지 남은 시간 |
 
 **Behaviors**:
-1. **적 일반 공격 (Idle 상태에서만)**:
+1. **스킬 데미지 적용**:
+   - `TryCast`는 비용·쿨다운·기세를 먼저 처리한다.
+   - `SkillCastPublished` 이벤트를 먼저 보낸다.
+   - `SkillRange`에 따라 살아있는 적 타겟을 고른다.
+     - `Single`: 가장 앞의 살아있는 적 1명.
+     - `NearbyPair`: 가장 앞의 살아있는 적부터 최대 2명.
+     - `All`: 모든 살아있는 적.
+   - 선택된 타겟마다 `DamageEffect.amount`만큼 데미지를 적용한다.
+2. **적 일반 공격 (Engage 페이즈 + Idle 상태에서만)**:
    - `normalAttackCooldown > 0` → `cd -= dt`.
-   - `cd ≤ 0` 이고 사거리 안에 플레이어 있음 → 데미지 적용 + `cd = normalAttackPeriod`.
-2. **데미지 적용**: `target.hp = max(0, target.hp - amount)`. 0이 되면 다음 step에서 `state = Dead` 전이.
-3. **사망 처리**: 매 Tick 끝에 hp=0인 액터를 Dead로 전이 + `OnActorDeath(actorId)` 이벤트.
-4. **승/패 판정**:
+   - `cd ≤ 0` 이고 플레이어와의 거리 ≤ `enemy.engageDistance` → 플레이어에게 데미지 적용 + `cd = normalAttackPeriod`.
+3. **데미지 적용**: `target.hp = max(0, target.hp - amount)`.
+   0이 되면 다음 step에서 `state = Dead` 전이.
+4. **사망 처리**: 매 Tick 끝에 hp=0인 액터를 Dead로 전이 + `ActorDeathPublished` 이벤트.
+5. **승/패 판정**:
    - 모든 적이 Dead → BattlePhase = Resolve(victory) + 종료.
    - Player가 Dead → BattlePhase = Resolve(defeat) + 종료.
 
@@ -535,23 +556,23 @@ hp_new      = max(0, hp_old - finalDamage)
 > [!note]
 > 매트릭스 배율은 Phase 5/6에서 들어옴. 능력치 압도 보정은 §4 Open Question.
 
-**Interfaces (추가)**:
+**Events (추가)**:
 ```csharp
-public interface IDamageResolver
-{
-    int Resolve(Actor source, Actor target, int baseDamage, DamageContext ctx);
-}
-
-public readonly struct DamageContext
-{
-    public readonly DamageSource Kind;   // NormalAttack / Skill / HeavyAttack / Ohi
-    public readonly string SkillId;      // null 가능
-}
-
-// Engine 이벤트
-event Action<int srcId, int dstId, int dmg, DamageContext ctx> OnDamage;
-event Action<int actorId> OnActorDeath;
+event Action<DamageEvent> DamagePublished;
+event Action<ActorDeathEvent> ActorDeathPublished;
+event Action<BattleResult> BattleResultPublished;
 ```
+
+**Engine entry point (추가)**:
+```csharp
+public interface IDamageApplier
+{
+    void ApplyDamage(Actor source, Actor target, int amount, DamageSource sourceKind, string skillId);
+}
+```
+
+`IDamageApplier`는 HP 변경과 `DamagePublished` 발행을 한 곳으로 모으는 진입점이다.
+최종 데미지를 계산하는 resolver는 아직 만들지 않는다.
 
 **Invariants**:
 - I-4.1: `finalDamage ≥ 0` (음수 데미지 = 회복은 별도 effect로).
@@ -562,12 +583,12 @@ event Action<int actorId> OnActorDeath;
 **Edge**:
 - 같은 Tick에 두 액터가 서로를 죽이는 경우 — 양측 모두 Dead, BattleResult는 player의 사망이 우선(defeat).
 - 적 사망 시점에 적의 진행 중 normalAttack은 취소된다.
-- 적이 사거리 밖으로 이탈하면 normalAttackCooldown은 그대로 흐른다 (재진입 시 즉시 발동 가능).
+- 적이 공격 거리 밖으로 이탈하면 normalAttackCooldown은 그대로 흐른다 (재진입 시 즉시 발동 가능).
 
 **Acceptance**:
 - [ ] EditMode: 적 1 (normalAtk=3, period=2.5s) vs Player(HP=100) → 25초 = 10회 공격, Player HP=70 ± 0.
 - [ ] EditMode: 스킬 데미지 5 시전 → 적 HP 정확히 감소.
-- [ ] EditMode: 결정성 — 같은 시드 + 같은 BattleStartData → OnDamage/OnActorDeath 시퀀스 동일.
+- [ ] EditMode: 결정성 — 같은 시드 + 같은 BattleStartData → DamagePublished/ActorDeathPublished 시퀀스 동일.
 - [ ] PlayMode: 시각 확인 — 적이 일정 주기로 플레이어 HP를 깎고, 스킬이 적 HP를 깎고, 누군가 0 되면 전투 종료.
 
 ---
@@ -998,7 +1019,7 @@ public interface ITalentSpecialBehavior
 **Invariants**:
 - I-9.1: 경공 보장 회피는 한 전투에 한 번만 사용된다 (HP 30% 재진입에는 재발동 X — 단순 룰).
 - I-9.2: 회피 RNG는 IRngService를 통한다.
-- I-9.3: 회피된 공격은 OnDamage 이벤트에 amount=0 으로 송신 (UI 표시용).
+- I-9.3: 회피된 공격은 DamagePublished 이벤트에 amount=0 으로 송신 (UI 표시용).
 
 **Edge**:
 - 같은 Tick에 여러 공격이 도달하는 경우 각각 독립 회피 판정.
@@ -1023,7 +1044,7 @@ public interface ITalentSpecialBehavior
 **Behaviors**:
 1. View는 Engine으로부터 다음만 받는다:
    - `BattleSnapshot` (매 틱)
-   - `OnSkillCast`, `OnDamage`, `OnActorDeath`, `OnDefenseMindGameStart`, `OnDefenseResolved`, `OnOffenseMindGameStart`, `OnOffenseResolved`, `OnDodge`, `OnHeavyAttackTrigger`, `OnOuuiRefused`, `BattleResult`.
+   - `SkillCastPublished`, `DamagePublished`, `ActorDeathPublished`, `DefenseMindGameStarted`, `DefenseResolved`, `OffenseMindGameStarted`, `OffenseResolved`, `DodgePublished`, `HeavyAttackTriggered`, `OuuiRefused`, `BattleResultPublished`.
 2. View는 Engine에 다음만 호출한다:
    - `IBattleInput.SubmitDefense(choice)`
    - `IBattleInput.PressOuui(slotIndex)`, `SubmitOuuiTarget(enemyId)`, `SubmitOuui(pattern)`
@@ -1157,6 +1178,7 @@ public interface ITelemetrySink
 | 2026-05-21 | 0.4.8 | `SkillRange`를 정확한 거리 밴드가 아니라 사거리 등급으로 정리. Close는 25 이하, Mid는 60 이하, Long은 100 이하에서 시전 가능하므로 가까운 적에게 Mid 무공도 사용할 수 있다. |
 | 2026-05-21 | 0.4.9 | `AttackRange`를 `EngageDistance`로 재명명해 교전 시작 거리와 무공 범위를 분리. `SkillRange` 멤버를 `Single`/`NearbyPair`/`All`로 바꾸고, 거리 게이팅이 아니라 타겟 범위 의미로 정리. |
 | 2026-05-21 | 0.4.10 | **Phase 3 완료** — `IBattleSystem` 구조 도입, `MovementSystem`/`EngagementSystem`/`CastingSystem` 분리, `SkillData`/`SkillSlot`/기세 자원/자동 시전 결정 트리 추가. EditMode 테스트와 PlayMode 확인 체크리스트 통과. |
+| 2026-05-21 | 0.4.11 | **Phase 4 진입 전 SSOT 보정** — `SkillRange`가 타겟 범위가 되었으므로 적 일반 공격의 거리 판정은 `EnemyData.engageDistance`/`Actor.EngageDistance`로 정리. Phase 4는 `DamageEffect`만 도입하고 회복·버프·디버프와 `IDamageResolver` 인터페이스는 실제 규칙이 생기는 Phase까지 보류. 공개 전투 이벤트명은 `Published` 계열로 정리. |
 
 ---
 
@@ -1175,7 +1197,7 @@ public interface ITelemetrySink
 - (P0): `ITickService`, `IRngService`, `IBattleEngine`.
 
 ### 6.4 이벤트 카탈로그
-- (P0): `SnapshotPublished`, `OnResult`.
+- (P0): `SnapshotPublished`, `BattleResultPublished`.
 
 > [!note]
 > 위 4개 부록은 Phase 1 종료 시점부터 누적 갱신.
