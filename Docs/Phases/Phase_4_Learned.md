@@ -8,7 +8,7 @@
 
 ## 먼저 볼 것
 
-Phase 4에서 Anki 카드로 가져갈 만한 장기 개념은 8개다.
+Phase 4에서 Anki 카드로 가져갈 만한 장기 개념은 9개다.
 
 | 번호 | 개념 | 카드로 바꿀 질문 |
 |------|------|------------------|
@@ -19,7 +19,8 @@ Phase 4에서 Anki 카드로 가져갈 만한 장기 개념은 8개다.
 | 5 | 데미지와 사망 분리 | HP를 깎는 일과 죽음을 확정하는 일을 왜 나누나? |
 | 6 | 이벤트 순서 | 이벤트 순서는 왜 게임 규칙인가? |
 | 7 | 시스템 실행 순서 | 시스템 순서는 왜 단순한 구현 순서가 아닌가? |
-| 8 | 필요한 효과만 만들기 | 왜 Phase 4에서는 `DamageEffect`만 만드나? |
+| 8 | 필요한 효과만 만들기 | 왜 Phase 4에서는 `SkillDamageEffect`만 만드나? |
+| 9 | 다형성 직렬화 | `[SerializeReference]`는 왜 필요한가? |
 
 ---
 
@@ -84,6 +85,11 @@ Phase 4에서는 그 출입문이 `ApplyDamage`다.
 - 데미지가 실제로 적용됐을 때 `DamagePublished`를 보낸다.
 - 죽은 액터에게 데미지를 다시 적용하지 않는다.
 - 나중에 회피나 배율이 생길 때 넣을 위치를 만든다.
+
+`source`와 `target`은 누가 누구에게 데미지를 줬는지 나타낸다.
+`DamageKind`는 데미지 방식만 나타낸다.
+예: `NormalAttack`, `Skill`.
+그래서 `EnemyNormalAttack`처럼 진영과 방식을 한 enum 값에 섞지 않는다.
 
 > [!important]
 > 중요한 상태 변경은 한곳으로 모을수록 규칙을 빠뜨리기 어렵다.
@@ -185,12 +191,12 @@ Phase 4의 순서는 이렇다.
 
 ---
 
-## 8. 왜 Phase 4에서는 `DamageEffect`만 만드나?
+## 8. 왜 Phase 4에서는 `SkillDamageEffect`만 만드나?
 
 SSOT에는 스킬 효과라는 자리가 있다.
 하지만 Phase 4에서 실제로 필요한 효과는 데미지 하나다.
 
-그래서 `DamageEffect`만 만든다.
+그래서 `SkillDamageEffect`만 만든다.
 
 | 만들지 않은 효과 | 나중에 필요한 조건 |
 |------------------|-------------------|
@@ -200,6 +206,31 @@ SSOT에는 스킬 효과라는 자리가 있다.
 
 미리 타입만 만들어 두면 코드는 있는 것처럼 보이지만 아무 일도 안 한다.
 이 프로젝트 규칙에서는 그런 빈 미래 코드를 만들지 않는다.
+
+---
+
+## 9. `[SerializeReference]`는 왜 필요한가?
+
+`[SerializeReference]`는 부모 타입 필드에 실제 자식 타입 객체를 담기 위한 Unity 직렬화 속성이다.
+이번 Phase에서는 `SkillEffect` 배열 안에 `SkillDamageEffect`를 넣기 위해 필요하다.
+
+일반 Unity 직렬화는 필드 타입 중심으로 값을 저장한다.
+그래서 `SkillEffect`처럼 base 타입으로 선언된 필드에
+`SkillDamageEffect` 같은 하위 타입을 안정적으로 담기 어렵다.
+
+```csharp
+[SerializeReference]
+public SkillEffect[] Effects = Array.Empty<SkillEffect>();
+```
+
+이렇게 쓰면 Unity가 배열 원소의 실제 타입 정보를 함께 저장한다.
+덕분에 `SkillData`는 "효과 목록"만 알고,
+각 효과의 구체적인 동작은 `SkillDamageEffect` 같은 하위 타입이 맡을 수 있다.
+
+> [!warning]- Inspector에서 바로 편해지는 것은 아니다
+> `[SerializeReference]`는 직렬화 방식이다.
+> Inspector에서 하위 타입을 고르는 UI까지 항상 보기 좋게 만들어 주지는 않는다.
+> 필요하면 Unity의 managed reference 선택 UI나 임시 에디터 작업으로 에셋을 채운다.
 
 ---
 
@@ -214,7 +245,8 @@ Phase 4를 마치고 아래 질문에 답할 수 있으면 충분하다.
 - [ ] 데미지 적용과 사망 처리를 분리하는 이유를 설명할 수 있다.
 - [ ] 이벤트 순서가 왜 게임 규칙인지 설명할 수 있다.
 - [ ] 시스템 실행 순서가 전투 결과에 영향을 주는 이유를 설명할 수 있다.
-- [ ] Phase 4에서 `DamageEffect`만 만드는 이유를 설명할 수 있다.
+- [ ] Phase 4에서 `SkillDamageEffect`만 만드는 이유를 설명할 수 있다.
+- [ ] `[SerializeReference]`가 필요한 이유를 설명할 수 있다.
 
 ---
 

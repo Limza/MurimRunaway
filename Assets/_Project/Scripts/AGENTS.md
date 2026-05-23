@@ -38,7 +38,7 @@ SSOT는 [Docs/BATTLE_DESIGN.md](../../../Docs/BATTLE_DESIGN.md). 전투 시스�
 - **`System` 접미사 = 내부 시뮬레이션 모듈.** `BattleContext` 같은 공유 상태를 매 Tick 변경하는 cohesive 도메인 로직 묶음. **외부 의존이 없고** 엔진(`BattleEngine`)이 등록 순서대로 호출한다. 예: `MovementSystem`/`EngagementSystem`/`CastingSystem`. ECS의 "System" 개념과 같은 결.
 - **`Service` ↔ `System` 판별식**: *"이걸 mock으로 갈아 끼워도 게임 규칙은 그대로인가?"* → Yes면 Service(시간·난수·저장 등 환경 어댑터), No면 System(규칙 자체). 헷갈리면 Engine asmdef의 `UnityEngine` 의존 차단선에 걸치는지로 본다 — 그 선을 넘어 외부와 통신하면 Service, 안에서 상태만 만지면 System.
 - **DTO/VO/Entity 같은 패턴 접미사는 붙이지 않는다.** 역할이 모호하면 역할이 드러나는 이름을 쓴다 (예: `BattleSnapshot`).
-- **Enum은 `Enums/` 하위 폴더에 두고, 이름에 `Type`/`Enum` 접미사를 붙이지 않는다.** 네임스페이스는 부모와 동일하게 유지(폴더는 조직용). 이유: VS Code 파일 트리가 `.cs` 아이콘 통일이라 클래스와 enum이 시각적으로 안 구분됨 — 폴더로 가른다.
+- **Enum은 `_Enums/` 하위 폴더에 두고, 이름에 `Type`/`Enum` 접미사를 붙이지 않는다.** 네임스페이스는 부모와 동일하게 유지(폴더는 조직용). 이유: VS Code 파일 트리에서 enum 묶음이 바로 보이게 하기 위함이다.
 - **Enum의 첫 값은 `None = 0`으로 둔다.** 초기화를 빼먹었을 때 실제 값처럼 보이지 않게 하기 위함이다. 외부 파일/API에서 0이 정해진 값이면, 그 이유를 가까운 문서에 남긴다.
 - **Enum 타입과 모든 멤버에 XML `///` 주석을 단다.** 도메인 용어(`Approach`, `Resolve` 등)는 코드만으로 의미가 안 드러나므로 호버 툴팁으로 즉시 확인할 수 있게 한다. WHAT 설명 금지 원칙의 예외 — enum 멤버는 식별자가 짧아 의미를 담기 어려운 도메인 어휘인 경우가 많음.
 

@@ -18,5 +18,14 @@ namespace MurimRunaway.Battle.Domain
 
         [Tooltip("적은 이 위치에 고정 배치됨")]
         public float SpawnPosition = 100f;
+
+        [Tooltip("일반 공격 데미지")]
+        public int NormalAttackDamage = 3;
+
+        [Tooltip("일반 공격 주기 (초)")]
+        public float NormalAttackPeriod = 2.5f;
+
+        [Tooltip("플레이어가 이 거리 안에 있으면 일반 공격 가능")]
+        public float EngageDistance = 20f;
     }
 }

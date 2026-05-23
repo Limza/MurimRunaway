@@ -512,15 +512,15 @@ event Action<SkillCastEvent> SkillCastPublished;
 `SkillData` 확장:
 | 필드 | 타입 | 디폴트 | 설명 |
 |------|------|--------|------|
-| effects | SkillEffect[] | empty | 발동 시 적용 효과. 본 Phase에서는 `DamageEffect`만 사용 |
+| effects | SkillEffect[] | empty | 발동 시 적용 효과. 본 Phase에서는 `SkillDamageEffect`만 사용 |
 
 `SkillEffect`:
-- `DamageEffect { int amount }`
+- `SkillDamageEffect { int amount }`
 - `HealEffect`, `BuffEffect`, `DebuffEffect`는 실제 동작을 넣는 Phase에서 정의
 
 **Content assets**:
 - 본 Phase에서는 새 무공·새 적 에셋을 따로 만들지 않는다.
-- 기존 확인용 `SkillData` 에셋에는 `DamageEffect`를 채우고, 기존 `EnemyData` 에셋에는 일반 공격 값을 채운다.
+- 기존 확인용 `SkillData` 에셋에는 `SkillDamageEffect`를 채우고, 기존 `EnemyData` 에셋에는 일반 공격 값을 채운다.
 
 `EnemyActor` 확장:
 | 필드 추가 | 타입 | 디폴트 | 설명 |
@@ -537,7 +537,7 @@ event Action<SkillCastEvent> SkillCastPublished;
      - `Single`: 가장 앞의 살아있는 적 1명.
      - `NearbyPair`: 가장 앞의 살아있는 적부터 최대 2명.
      - `All`: 모든 살아있는 적.
-   - 선택된 타겟마다 `DamageEffect.amount`만큼 데미지를 적용한다.
+   - 선택된 타겟마다 `SkillDamageEffect.amount`만큼 데미지를 적용한다.
 2. **적 일반 공격 (Engage 페이즈 + Idle 상태에서만)**:
    - `normalAttackCooldown > 0` → `cd -= dt`.
    - `cd ≤ 0` 이고 플레이어와의 거리 ≤ `enemy.engageDistance` → 플레이어에게 데미지 적용 + `cd = normalAttackPeriod`.
@@ -547,6 +547,11 @@ event Action<SkillCastEvent> SkillCastPublished;
 5. **승/패 판정**:
    - 모든 적이 Dead → BattlePhase = Resolve(victory) + 종료.
    - Player가 Dead → BattlePhase = Resolve(defeat) + 종료.
+
+> [!important] UI 문구 정책
+> `BattleResult.Defeat`는 코드 판정명으로만 쓴다.
+> 플레이어에게 보이는 UI에는 "패배" 단어를 쓰지 않는다.
+> 결과 화면은 "재도전", "다시 도전" 계열 문구를 우선 검토한다.
 
 **Formulas — 데미지 (단순 1차)**:
 ```
@@ -567,11 +572,13 @@ event Action<BattleResult> BattleResultPublished;
 ```csharp
 public interface IDamageApplier
 {
-    void ApplyDamage(Actor source, Actor target, int amount, DamageSource sourceKind, string skillId);
+    void ApplyDamage(Actor source, Actor target, int amount, DamageKind damageKind, string skillId);
 }
 ```
 
 `IDamageApplier`는 HP 변경과 `DamagePublished` 발행을 한 곳으로 모으는 진입점이다.
+공격자와 피격자는 `source`/`target` 액터로 표현한다.
+`DamageKind`는 데미지 방식만 표현한다.
 최종 데미지를 계산하는 resolver는 아직 만들지 않는다.
 
 **Invariants**:
@@ -1011,7 +1018,7 @@ public interface ITalentSpecialBehavior
 2. **경공 트리거 (HP 30% 이하 진입 첫 번째 1회)**:
    - **트리거 조건 (결정)**: PlayerActor의 skillSlots 중 SkillKind.Step 무공이 1개 이상 존재할 때만 활성화. 경공 무공이 없는 빌드는 보장 회피 자체가 없음.
    - 조건 충족 + HP 30% 이하 진입 시 다음 데미지 1회를 보장 회피.
-3. 회피 발생 시 `OnDodge(targetId, sourceKind)` 이벤트.
+3. 회피 발생 시 `OnDodge(targetId, damageKind)` 이벤트.
 
 **Formulas**:
 - `damageAfterDodge = isDodged ? 0 : finalDamage`
@@ -1178,7 +1185,7 @@ public interface ITelemetrySink
 | 2026-05-21 | 0.4.8 | `SkillRange`를 정확한 거리 밴드가 아니라 사거리 등급으로 정리. Close는 25 이하, Mid는 60 이하, Long은 100 이하에서 시전 가능하므로 가까운 적에게 Mid 무공도 사용할 수 있다. |
 | 2026-05-21 | 0.4.9 | `AttackRange`를 `EngageDistance`로 재명명해 교전 시작 거리와 무공 범위를 분리. `SkillRange` 멤버를 `Single`/`NearbyPair`/`All`로 바꾸고, 거리 게이팅이 아니라 타겟 범위 의미로 정리. |
 | 2026-05-21 | 0.4.10 | **Phase 3 완료** — `IBattleSystem` 구조 도입, `MovementSystem`/`EngagementSystem`/`CastingSystem` 분리, `SkillData`/`SkillSlot`/기세 자원/자동 시전 결정 트리 추가. EditMode 테스트와 PlayMode 확인 체크리스트 통과. |
-| 2026-05-21 | 0.4.11 | **Phase 4 진입 전 SSOT 보정** — `SkillRange`가 타겟 범위가 되었으므로 적 일반 공격의 거리 판정은 `EnemyData.engageDistance`/`Actor.EngageDistance`로 정리. Phase 4는 `DamageEffect`만 도입하고 회복·버프·디버프와 `IDamageResolver` 인터페이스는 실제 규칙이 생기는 Phase까지 보류. 공개 전투 이벤트명은 `Published` 계열로 정리. |
+| 2026-05-21 | 0.4.11 | **Phase 4 진입 전 SSOT 보정** — `SkillRange`가 타겟 범위가 되었으므로 적 일반 공격의 거리 판정은 `EnemyData.engageDistance`/`Actor.EngageDistance`로 정리. Phase 4는 `SkillDamageEffect`만 도입하고 회복·버프·디버프와 `IDamageResolver` 인터페이스는 실제 규칙이 생기는 Phase까지 보류. 공개 전투 이벤트명은 `Published` 계열로 정리. |
 
 ---
 
