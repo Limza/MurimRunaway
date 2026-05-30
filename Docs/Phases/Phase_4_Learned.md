@@ -69,6 +69,86 @@ HP가 줄고, 죽고, 승패가 확정되는 흐름을 일관되게 보장해야
 > 이 둘을 나누면 거리 판단과 대상 선택이 섞이지 않는다.
 > 이름이 정확해지면 잘못된 설계가 코드로 들어올 가능성도 줄어든다.
 
+### LINQ로 대상 목록을 고르는 코드는 어떻게 읽나?
+
+`GetAliveEnemiesByRange`는 살아있는 적을 고른 뒤, 앞쪽 순서로 정렬한다.
+그 다음 `SkillRange`에 맞는 앞쪽 범위를 돌려준다.
+
+```csharp
+var aliveEnemies = Enemies
+    .Where(enemy => enemy.State != ActorState.Dead && enemy.Hp > 0)
+    .OrderBy(enemy => enemy.Position)
+    .ThenBy(enemy => enemy.Id)
+    .ToArray();
+```
+
+`var`는 오른쪽 식의 실제 자료형을 컴파일러가 대신 쓰게 하는 문법이다.
+위 코드에서 `aliveEnemies`의 실제 자료형은 `EnemyActor[]`다.
+
+`IOrderedEnumerable`은 C# enum이 아니다.
+`IEnumerable` 계열 interface라서 "순서대로 하나씩 꺼낼 수 있는 것"에 가깝다.
+`OrderBy`와 `ThenBy`를 지나 `ToArray()` 전까지의 중간 결과가 이 계열이다.
+
+`ToArray()`는 LINQ 중간 결과를 실제 배열로 만든다.
+그래서 이후 switch에서는 `EnemyActor[]`의 앞쪽 몇 명을 쓸지만 정한다.
+
+| 코드 | 쉬운 뜻 | 결과 자료형 |
+|------|---------|-------------|
+| `Where(...)` | 살아있는 적만 남긴다 | `IEnumerable<EnemyActor>` |
+| `OrderBy(...)` | `Position`이 작은 순서로 정렬한다 | `IOrderedEnumerable<EnemyActor>` |
+| `ThenBy(...)` | 같은 `Position` 안에서 `Id`가 작은 순서로 다시 정렬한다 | `IOrderedEnumerable<EnemyActor>` |
+| `ToArray()` | 지금까지 고른 대상을 배열로 만든다 | `EnemyActor[]` |
+| `Math.Min(2, aliveEnemies.Length)` | 앞에서 최대 2명을 쓰겠다고 정한다 | `int` |
+| `AsMemory(0, targetCount)` | 배열을 새로 만들지 않고 범위만 감싼다 | `ReadOnlyMemory<EnemyActor>` |
+
+`ThenBy`는 단독 정렬이 아니라 2차 정렬이다.
+이 코드에서는 같은 위치에 적이 여럿 있을 때 항상 같은 순서로 고르기 위해 쓴다.
+SSOT에는 같은 위치의 적 순서를 `id` 오름차순으로 고정하는 결정성 규칙이 있다.
+
+`ReadOnlyMemory<EnemyActor>`는 배열 일부를 가리키는 값이다.
+기존 배열, 시작 위치, 개수를 함께 들고 있다.
+
+`Single`과 `NearbyPair`는 새 배열을 만들지 않는다.
+같은 `aliveEnemies` 배열에서 앞쪽 1명 또는 2명 범위만 넘긴다.
+
+`ReadOnlyMemory`의 `ReadOnly`는 범위 안의 슬롯 교체를 막는다는 뜻이다.
+`targets.Span[0] = otherEnemy`처럼 다른 적으로 바꾸는 일은 할 수 없다.
+
+하지만 `EnemyActor`는 class라서 슬롯 안의 객체는 그대로 수정할 수 있다.
+그래서 `ApplyDamage`가 `skillTarget.Hp`나 `skillTarget.State`를 바꾸는 흐름은 가능하다.
+
+| 코드 | 가능 여부 | 이유 |
+|------|-----------|------|
+| `targets.Span[0] = otherEnemy` | 불가 | 읽기 전용 범위라 슬롯 교체가 안 된다 |
+| `targets.Span[0].Hp -= 5` | 가능 | 슬롯 안의 `EnemyActor` 객체는 mutable이다 |
+
+이번 helper는 타겟 목록 자체를 바꾸려는 코드가 아니다.
+타겟 범위를 고정한 뒤, 그 안의 적 객체에 데미지를 적용하는 코드다.
+그래서 `Memory<EnemyActor>`보다 `ReadOnlyMemory<EnemyActor>`가 의도를 더 잘 드러낸다.
+
+### `CastingSystem`도 범위 타겟을 알아야 하나?
+
+`CastingSystem`은 어떤 슬롯을 쓸지만 고른다.
+어떤 적들이 맞는지는 `BattleEngine.TryCast`가 `SkillRange`로 고른다.
+
+이렇게 나누면 자동 시전 결정과 데미지 대상 선택이 섞이지 않는다.
+`CastingSystem`이 가장 가까운 적 1명을 먼저 고르면,
+`NearbyPair`와 `All` 같은 범위 무공의 뜻이 다시 흐려진다.
+
+`SkillCastPublished`는 맞은 적마다 나가는 이벤트가 아니다.
+무공을 한 번 성공적으로 시전했다는 이벤트다.
+그래서 시전 1회에 한 번만 나간다.
+
+대신 실제로 맞은 적들은 `DamagePublished`를 각각 받는다.
+예를 들어 `NearbyPair`가 적 2명을 때리면 흐름은 이렇게 된다.
+
+1. `SkillCastPublished` 1번.
+2. 첫 번째 적 `DamagePublished` 1번.
+3. 두 번째 적 `DamagePublished` 1번.
+
+`SkillCastEvent`에는 대상 id를 담지 않는다.
+피격 대상은 `DamageEvent.TargetId`로 확인한다.
+
 ---
 
 ## 3. HP 변경은 왜 `ApplyDamage`를 통과해야 하나?
@@ -240,6 +320,7 @@ Phase 4를 마치고 아래 질문에 답할 수 있으면 충분하다.
 
 - [ ] 전투 시스템에 결과가 생기면 설계에서 무엇이 달라지는지 설명할 수 있다.
 - [ ] `EngageDistance`와 `SkillRange`의 차이를 설명할 수 있다.
+- [ ] `Where`/`OrderBy`/`ThenBy`/`ToArray`/`ReadOnlyMemory`의 자료형 흐름을 설명할 수 있다.
 - [ ] HP 변경을 `ApplyDamage`로 모으는 이유를 설명할 수 있다.
 - [ ] `IDamageResolver`를 Phase 4에서 만들지 않는 이유를 설명할 수 있다.
 - [ ] 데미지 적용과 사망 처리를 분리하는 이유를 설명할 수 있다.

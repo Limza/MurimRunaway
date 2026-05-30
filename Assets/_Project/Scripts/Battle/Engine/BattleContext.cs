@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using MurimRunaway.Battle.Domain;
 
 namespace MurimRunaway.Battle.Engine
@@ -29,6 +31,25 @@ namespace MurimRunaway.Battle.Engine
                 }
             }
             return nearest;
+        }
+
+        public ReadOnlyMemory<EnemyActor> GetAliveEnemiesByRange(SkillRange range)
+        {
+            var aliveEnemies = Enemies
+                .Where(enemy => enemy.State != ActorState.Dead && enemy.Hp > 0)
+                .OrderBy(enemy => enemy.Position)
+                .ThenBy(enemy => enemy.Id)
+                .ToArray();
+
+            var targetCount = range switch
+            {
+                SkillRange.Single => Math.Min(1, aliveEnemies.Length),
+                SkillRange.NearbyPair => Math.Min(2, aliveEnemies.Length),
+                SkillRange.All => aliveEnemies.Length,
+                _ => 0,
+            };
+
+            return aliveEnemies.AsMemory(0, targetCount);
         }
     }
 }

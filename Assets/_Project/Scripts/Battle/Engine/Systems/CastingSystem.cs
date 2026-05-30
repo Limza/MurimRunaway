@@ -17,7 +17,7 @@ namespace MurimRunaway.Battle.Engine
         {
             var player = context.Player;
 
-            // ① 쿨다운 감소 — 페이즈와 무관하게 항상 흐른다.
+            // 쿨다운 감소 — 페이즈와 무관하게 항상 흐른다.
             foreach (var slot in player.Skills)
             {
                 if (slot.Data == null)
@@ -29,12 +29,7 @@ namespace MurimRunaway.Battle.Engine
             if (context.Phase != BattlePhase.Engage)
                 return;
 
-            // ② 타겟 선택
-            var target = context.GetNearestAliveEnemy();
-            if (target == null)
-                return;
-
-            // ③ 슬롯 순회 — 통과한 첫 슬롯에서 break
+            // 슬롯 순회 — 통과한 첫 슬롯에서 break
             for (var slotIndex = 0; slotIndex < player.Skills.Length; slotIndex++)
             {
                 var slot = player.Skills[slotIndex];
@@ -47,9 +42,9 @@ namespace MurimRunaway.Battle.Engine
                 if (player.Mana < skill.ManaCost)
                     continue;
 
-                // ④ 통과 — 시전하고 한 Tick 종료 (두 무공 동시 발동 금지)
-                _executor.TryCast(player, slotIndex, target);
-                break;
+                // 통과 — 시전하고 한 Tick 종료 (두 무공 동시 발동 금지)
+                if (_executor.TryCast(player, slotIndex))
+                    break;
             }
         }
     }

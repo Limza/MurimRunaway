@@ -5,16 +5,19 @@ using MurimRunaway.Battle.Domain;
 namespace MurimRunaway.Battle.Engine
 {
     /// <summary>전투 시뮬레이션 본체. 틱마다 상태를 진행시키고 SnapshotPublished으로 통보.</summary>
-    public sealed class BattleEngine : IResourceMutator, ISkillExecutor
+    public sealed class BattleEngine : IResourceMutator, ISkillExecutor, IDamageApplier
     {
-        private readonly ITickService _tick;
-        private readonly IRngService _rng;
-
-        private BattleContext _context;
-        private IBattleSystem[] _systems;
-
         public event Action<BattleSnapshot> SnapshotPublished;
         public event Action<SkillCastEvent> SkillCastPublished;
+        public event Action<DamageEvent> DamagePublished;
+        public event Action<ActorDeathEvent> ActorDeathPublished;
+        public event Action<BattleResult> BattleResultPublished;
+
+        private readonly ITickService _tick;
+        private readonly IRngService _rng;
+        private BattleContext _context;
+        private IBattleSystem[] _systems;
+        private BattleResult _result = BattleResult.None;
 
         public BattleEngine(ITickService tick, IRngService rng)
         {
@@ -59,6 +62,10 @@ namespace MurimRunaway.Battle.Engine
                 Position = enemyData.SpawnPosition,
                 State = ActorState.Idle,
                 SourceId = enemyData.Id,
+                NormalAttackDamage = enemyData.NormalAttackDamage,
+                NormalAttackPeriod = enemyData.NormalAttackPeriod,
+                NormalAttackCooldown = 0f,
+                EngageDistance = enemyData.EngageDistance,
             }).ToArray();
 
             _context = new BattleContext
@@ -77,6 +84,7 @@ namespace MurimRunaway.Battle.Engine
                 new MovementSystem(),
                 new EngagementSystem(),
                 new CastingSystem(this),
+                new EnemyAttackSystem(this),
             };
         }
 
@@ -116,20 +124,50 @@ namespace MurimRunaway.Battle.Engine
             _context.Player.Momentum = Math.Min(nextMomentum, _context.Player.MaxMomentum);
         }
 
-        public bool TryCast(Actor caster, int slotIndex, Actor target)
+        public bool TryCast(Actor caster, int slotIndex)
         {
             var slot = _context.Player.Skills[slotIndex];
             var skill = slot.Data;
+            var targets = _context.GetAliveEnemiesByRange(skill.PreferredRange);
 
+            if (targets.Length == 0)
+                return false;
+
+            // 내공 소비
             if (!SpendMana(skill.ManaCost))
                 return false;
 
+            // 쿨다운 시작
             slot.CooldownRemaining = skill.CooldownSec;
+
+            // 기세 획득
             GainMomentum(skill.MomentumGainOnCast);
 
-            var skillCastEvent = new SkillCastEvent(caster.Id, slotIndex, skill.Id, target.Id);
+            // 스킬 시전 이벤트 발행
+            var skillCastEvent = new SkillCastEvent(caster.Id, slotIndex, skill.Id);
             SkillCastPublished?.Invoke(skillCastEvent);
+
+            // 범위 내 적들에서 데미지 적용
+            foreach (var skillTarget in targets.Span)
+            {
+                foreach (var effect in skill.Effects)
+                {
+                    if (effect is SkillDamageEffect damageEffect)
+                        ApplyDamage(caster, skillTarget, damageEffect.Amount, DamageKind.Skill, skill.Id);
+                }
+            }
+
             return true;
+        }
+
+        public void ApplyDamage(Actor source, Actor target, int amount, DamageKind damageKind, string skillId)
+        {
+            if (source.State == ActorState.Dead || target.State == ActorState.Dead)
+                return;
+
+            var finalDamage = Math.Max(0, amount);
+            target.Hp = Math.Max(0, target.Hp - finalDamage);
+            DamagePublished?.Invoke(new DamageEvent(source.Id, target.Id, finalDamage, damageKind, skillId));
         }
 
         private void HandleTick(float deltaTime)
@@ -142,6 +180,9 @@ namespace MurimRunaway.Battle.Engine
 
             foreach (var system in _systems)
                 system.Tick(_context, deltaTime);
+
+            // 사망/승패 정리
+            ResolveDeathsAndResult();
 
             // 사망 판정 전까지 시스템 실행 뒤 바로 스냅샷을 보낸다.
             PublishSnapshot();
@@ -156,8 +197,45 @@ namespace MurimRunaway.Battle.Engine
             for (var index = 0; index < enemies.Length; index++)
                 actors[index + 1] = enemies[index].ToView();
 
-            SnapshotPublished?.Invoke(
-                new BattleSnapshot(_context.TickIndex, _context.TimeSec, actors, _context.Phase));
+            var battleSnapshot = new BattleSnapshot(_context.TickIndex, _context.TimeSec, actors, _context.Phase);
+            SnapshotPublished?.Invoke(battleSnapshot);
+        }
+
+        private void ResolveDeathsAndResult()
+        {
+            if (_result != BattleResult.None)
+                return;
+
+            if (_context.Player.Hp <= 0 && _context.Player.State != ActorState.Dead)
+            {
+                _context.Player.State = ActorState.Dead;
+                ActorDeathPublished?.Invoke(new ActorDeathEvent(_context.Player.Id));
+            }
+
+            foreach (var enemy in _context.Enemies)
+            {
+                if (enemy.Hp > 0 || enemy.State == ActorState.Dead)
+                    continue;
+
+                enemy.State = ActorState.Dead;
+                ActorDeathPublished?.Invoke(new ActorDeathEvent(enemy.Id));
+            }
+
+            if (_context.Player.State == ActorState.Dead)
+            {
+                PublishBattleResult(BattleResult.Defeat);
+                return;
+            }
+
+            if (_context.Enemies.All(enemy => enemy.State == ActorState.Dead))
+                PublishBattleResult(BattleResult.Victory);
+        }
+
+        private void PublishBattleResult(BattleResult result)
+        {
+            _result = result;
+            _context.Phase = BattlePhase.Resolve;
+            BattleResultPublished?.Invoke(result);
         }
     }
 }

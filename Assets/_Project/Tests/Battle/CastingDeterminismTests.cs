@@ -29,7 +29,7 @@ namespace MurimRunaway.Battle.Tests
                 });
             var casts = new List<string>();
             engine.SkillCastPublished += skillCast =>
-                casts.Add($"{skillCast.SkillId}->{skillCast.TargetId}");
+                casts.Add($"{skillCast.SlotIndex}:{skillCast.SkillId}");
 
             engine.Start();
             tick.PumpTicks(400);

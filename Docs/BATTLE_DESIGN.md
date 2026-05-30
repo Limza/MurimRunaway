@@ -443,19 +443,20 @@ ActorView 확장 (Player 한정):
 **Behaviors — 자동 시전 결정 트리**:
 매 Tick에서 다음을 순서대로 수행한다.
 1. **쿨다운 감소**: `for each i: cooldowns[i] = max(0, cooldowns[i] - dt)`.
-2. **타겟 선택**: `GetNearestAliveEnemy()` — 살아있는 적 중 position 최소. 없으면 step 종료.
-3. **슬롯 순회 (slot order, 0..N-1)**:
+2. **슬롯 순회 (slot order, 0..N-1)**:
    - 슬롯이 비었으면 skip.
    - `cooldowns[i] > 0` 이면 skip.
    - `mana < skill.manaCost` 이면 skip.
    - skill.kind == Focus 이고 효과가 이미 활성 중이면 skip (중복 방지).
    - **여기까지 통과한 첫 스킬을 시전하고 break.**
-4. **시전 처리**:
+3. **시전 처리**:
+   - `SkillRange`로 살아있는 적 대상 목록을 고른다.
+   - 대상이 없으면 step 종료.
    - SpendMana(skill.manaCost). 실패 시 step 종료 (race condition 안전).
    - cooldowns[i] = skill.cooldownSec.
    - GainMomentum(skill.momentumGainOnCast).
+   - `SkillCastPublished(actorId, slotIndex, skillId)` 이벤트 발생.
    - skill.effects 적용 (Phase 4에서 정의).
-   - `SkillCastPublished(actorId, slotIndex, skillId, targetId)` 이벤트 발생.
 
 > [!note]
 > **루프 제약**: 한 Tick에 한 슬롯만 시전 (위 break). 두 스킬 동시 발동 금지. 이는 §6.4 SSOT의 "강공 동시 발동 정책" 결정과 정합.
@@ -466,7 +467,7 @@ ActorView 확장 (Player 한정):
 ```csharp
 public interface ISkillExecutor
 {
-    bool TryCast(Actor caster, int slotIndex, Actor target);
+    bool TryCast(Actor caster, int slotIndex);
 }
 
 // Engine 이벤트
@@ -481,7 +482,7 @@ event Action<SkillCastEvent> SkillCastPublished;
 
 **Edge**:
 - 슬롯 순서가 우선순위다 — 사용자가 슬롯 순서로 우선순위를 표현한다.
-- `GetNearestAliveEnemy()` 동률(같은 position) 시 id 오름차순.
+- `SkillRange` 대상 선택 동률(같은 position) 시 id 오름차순.
 - 시전 직후 적이 즉사하는 경우(Phase 4)에는 이벤트가 먼저 발생하고 사망 처리는 이후 Tick에서 적용 — 단일 Tick 내 순서 정의: (1) 쿨다운 감소 → (2) 시전 → (3) 효과 적용 → (4) 사망 판정 → (5) 스냅샷.
 
 **Acceptance**:
@@ -531,13 +532,17 @@ event Action<SkillCastEvent> SkillCastPublished;
 
 **Behaviors**:
 1. **스킬 데미지 적용**:
-   - `TryCast`는 비용·쿨다운·기세를 먼저 처리한다.
-   - `SkillCastPublished` 이벤트를 먼저 보낸다.
+   - `CastingSystem`은 슬롯 조건만 보고 시전을 요청한다.
+   - 실제 대상 목록은 `TryCast`가 `SkillRange`로 고른다.
+   - 대상이 없으면 비용·쿨다운·기세를 바꾸지 않는다.
+   - 대상이 있으면 비용·쿨다운·기세를 처리한다.
+   - `SkillCastPublished` 이벤트는 시전 1회당 한 번 보낸다.
+   - `SkillCastPublished`에는 피격 대상 id를 담지 않는다.
    - `SkillRange`에 따라 살아있는 적 타겟을 고른다.
      - `Single`: 가장 앞의 살아있는 적 1명.
      - `NearbyPair`: 가장 앞의 살아있는 적부터 최대 2명.
      - `All`: 모든 살아있는 적.
-   - 선택된 타겟마다 `SkillDamageEffect.amount`만큼 데미지를 적용한다.
+   - 선택된 타겟마다 `SkillDamageEffect.amount`만큼 데미지를 적용하고 `DamagePublished`를 보낸다.
 2. **적 일반 공격 (Engage 페이즈 + Idle 상태에서만)**:
    - `normalAttackCooldown > 0` → `cd -= dt`.
    - `cd ≤ 0` 이고 플레이어와의 거리 ≤ `enemy.engageDistance` → 플레이어에게 데미지 적용 + `cd = normalAttackPeriod`.
