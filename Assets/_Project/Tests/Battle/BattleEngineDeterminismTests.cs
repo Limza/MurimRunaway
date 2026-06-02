@@ -17,8 +17,10 @@ namespace MurimRunaway.Battle.Tests
             {
                 Assert.AreEqual(snapshotsA[index].TickIndex, snapshotsB[index].TickIndex);
                 Assert.AreEqual(snapshotsA[index].Phase, snapshotsB[index].Phase);
-                Assert.AreEqual(snapshotsA[index].Actors[0].Position,
-                                snapshotsB[index].Actors[0].Position, 0f); // Player.position
+                Assert.AreEqual(
+                    snapshotsA[index].Player.Position,
+                    snapshotsB[index].Player.Position,
+                    0f);
             }
         }
 

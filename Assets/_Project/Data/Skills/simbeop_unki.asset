@@ -20,3 +20,4 @@ MonoBehaviour:
   CooldownSec: 5
   PreferredRange: 0
   MomentumGainOnCast: 0
+  DamageAmount: 0

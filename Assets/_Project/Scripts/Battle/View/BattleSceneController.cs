@@ -54,6 +54,8 @@ namespace MurimRunaway.Battle.View
         {
             _engine.SnapshotPublished += HandleSnapshot;
             _engine.SkillCastPublished += HandleSkillCast;
+            _engine.ActorDeathPublished += HandleActorDeath;
+            _engine.BattleResultPublished += HandleBattleResult;
             
             _worldMax = _enemyDatas.Max(enemyData => enemyData.SpawnPosition);
             _skillCooldownOverlayImages = new Image[_skillCooldownOverlays.Length];
@@ -101,6 +103,9 @@ namespace MurimRunaway.Battle.View
 
             _engine.SnapshotPublished -= HandleSnapshot;
             _engine.SkillCastPublished -= HandleSkillCast;
+            _engine.ActorDeathPublished -= HandleActorDeath;
+            _engine.BattleResultPublished -= HandleBattleResult;
+            
             _engine.Dispose();
         }
 
@@ -119,29 +124,31 @@ namespace MurimRunaway.Battle.View
 
             var isFirstSnapshot = !_hasSnapshot;
             var gaugeWidth = _gauge.rect.width;
-            foreach (var actor in snapshot.Actors)
-            {
-                var markerIndex = actor.Id;
-                var marker = GetMarker(actor);
-                var markerTargetPosition = actor.Position / _worldMax * gaugeWidth;
-                _markerStartPositions[markerIndex] = isFirstSnapshot
-                    ? markerTargetPosition
-                    : marker.anchoredPosition.x;
-                _markerTargetPositions[markerIndex] = markerTargetPosition;
+            UpdateMarkerSnapshot(snapshot.Player, isFirstSnapshot, gaugeWidth);
+            foreach (var enemy in snapshot.Enemies)
+                UpdateMarkerSnapshot(enemy, isFirstSnapshot, gaugeWidth);
 
-                if (!actor.IsPlayer)
-                    continue;
-
-                _hpBar.SetValue(actor.Hp, actor.MaxHp);
-                _manaBar.SetValue(actor.Mana, actor.MaxMana);
-                _momentumBar.SetValue(actor.Momentum, actor.MaxMomentum);
-                _playerSkillSnapshot = actor.Skills;
-            }
+            var player = snapshot.Player;
+            _hpBar.SetValue(player.Hp, player.MaxHp);
+            _manaBar.SetValue(player.Mana, player.MaxMana);
+            _momentumBar.SetValue(player.Momentum, player.MaxMomentum);
+            _playerSkillSnapshot = player.Skills;
 
             _lastSnapshotTime = Time.time;
             _hasSnapshot = true;
             UpdateMarkerPositions();
             UpdateSkillCooldowns();
+        }
+
+        private void UpdateMarkerSnapshot(ActorView actor, bool isFirstSnapshot, float gaugeWidth)
+        {
+            var markerIndex = actor.Id;
+            var marker = GetMarker(actor);
+            var markerTargetPosition = actor.Position / _worldMax * gaugeWidth;
+            _markerStartPositions[markerIndex] = isFirstSnapshot
+                ? markerTargetPosition
+                : marker.anchoredPosition.x;
+            _markerTargetPositions[markerIndex] = markerTargetPosition;
         }
 
         private RectTransform GetMarker(ActorView actor)
@@ -199,6 +206,19 @@ namespace MurimRunaway.Battle.View
                 StopCoroutine(_skillNameFlashRoutines[slotIndex]);
 
             _skillNameFlashRoutines[slotIndex] = StartCoroutine(FlashSkillName(slotIndex, skillCast.SkillId));
+        }
+
+        private void HandleActorDeath(ActorDeathEvent actorDeath)
+        {
+            var actorLabel = actorDeath.ActorId == 0
+                ? "Player"
+                : $"Enemy {actorDeath.ActorId}";
+            Debug.Log($"ActorDeathPublished: {actorLabel}");
+        }
+
+        private void HandleBattleResult(BattleResult battleResult)
+        {
+            Debug.Log($"BattleResultPublished: {battleResult}");
         }
 
         private IEnumerator FlashSkillName(int slotIndex, string skillId)

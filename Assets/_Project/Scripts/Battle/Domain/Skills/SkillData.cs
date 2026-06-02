@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace MurimRunaway.Battle.Domain
@@ -32,8 +31,7 @@ namespace MurimRunaway.Battle.Domain
         [Tooltip("시전 성공 시 획득하는 기세")]
         public int MomentumGainOnCast;
 
-        [SerializeReference]
-        [Tooltip("무공 발동 시 적용 효과. Phase 4에서는 SkillDamageEffect만 사용")]
-        public SkillEffect[] Effects = Array.Empty<SkillEffect>();
+        [Tooltip("무공 데미지. 0이면 HP 데미지를 주지 않음")]
+        public int DamageAmount;
     }
 }

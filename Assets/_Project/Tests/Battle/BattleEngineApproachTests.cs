@@ -32,9 +32,9 @@ namespace MurimRunaway.Battle.Tests
             tick.PumpTicks(320);
 
             Assert.AreEqual(BattlePhase.Engage, last.Phase);
-            Assert.AreEqual(ActorState.Idle, last.Actors[0].State);    // Player
-            Assert.AreEqual(80f, last.Actors[0].Position, 1e-4f);      // Player position
-            Assert.AreEqual(100f, last.Actors[1].Position, 1e-4f);     // Enemy 고정
+            Assert.AreEqual(ActorState.Idle, last.Player.State);
+            Assert.AreEqual(80f, last.Player.Position, 1e-4f);
+            Assert.AreEqual(100f, last.Enemies[0].Position, 1e-4f);
         }
     }
 }

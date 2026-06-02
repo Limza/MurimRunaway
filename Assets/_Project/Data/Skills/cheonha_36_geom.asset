@@ -20,7 +20,4 @@ MonoBehaviour:
   CooldownSec: 3
   PreferredRange: 2
   MomentumGainOnCast: 0
-  Effects: []
-  references:
-    version: 2
-    RefIds: []
+  DamageAmount: 5

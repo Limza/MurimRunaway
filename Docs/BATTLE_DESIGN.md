@@ -276,7 +276,8 @@ Config, 씬 임시 입력, 테스트 빌더가 시작값을 정하고 Engine에�
 |------|------|------|
 | tickIndex | long | 시뮬 스텝 ID — 결정론 비교 키·로그 식별자 (정수) |
 | timeSec | float | 전투 시작 후 누적 경과(초) — UI/게임 로직 타이밍 (Engine 내부에서 dt 누적) |
-| actors | ActorView[] | 액터 read-only 사본 |
+| player | ActorView | Player read-only 사본 |
+| enemies | ActorView[] | Enemy read-only 사본. 입력 `BattleStartData.Enemies` 순서를 유지한다. |
 | phase | BattlePhase enum | None/Setup/Approach/Engage/Resolve |
 
 **State machine (Battle FSM, 추가)**:
@@ -323,7 +324,7 @@ public readonly struct ActorView
 - I-1.4: actor.id는 한 전투 내 unique.
 
 **Edge**:
-- 동일 spawnPosition에 적 N명을 배치할 경우, position은 같지만 id가 다르므로 ActorView 순서는 id 오름차순으로 직렬화한다 (스냅샷 결정성 보장).
+- 동일 spawnPosition에 적 N명을 배치할 경우, position은 같지만 `enemies`는 입력 순서를 유지하므로 스냅샷 결정성을 해치지 않는다.
 - Tick dt가 큰 경우(에디터 일시정지 후 재개) Player가 교전 시작 거리 안쪽으로 들어가버릴 수 있음 → Idle 전이 시 `player.position = nearestEnemy.position - player.engageDistance` 로 클램프.
 
 **Acceptance**:
@@ -420,7 +421,7 @@ ActorView 확장 (Player 한정):
 | cooldownSec | float | 1.5 | 쿨타임 |
 | preferredRange | SkillRange | None | 타겟 범위 |
 | momentumGainOnCast | int | 1 | 시전 성공 시 기세 획득 |
-| effects | SkillEffect[] | — | 발동 시 적용 효과 (Phase 4에서 정의) |
+| damageAmount | int | 0 | 발동 시 HP 데미지. 0이면 데미지 없음 |
 
 `PlayerActor` 확장:
 | 필드 추가 | 타입 | 설명 |
@@ -456,7 +457,7 @@ ActorView 확장 (Player 한정):
    - cooldowns[i] = skill.cooldownSec.
    - GainMomentum(skill.momentumGainOnCast).
    - `SkillCastPublished(actorId, slotIndex, skillId)` 이벤트 발생.
-   - skill.effects 적용 (Phase 4에서 정의).
+   - skill.damageAmount 적용 (Phase 4에서 정의).
 
 > [!note]
 > **루프 제약**: 한 Tick에 한 슬롯만 시전 (위 break). 두 스킬 동시 발동 금지. 이는 §6.4 SSOT의 "강공 동시 발동 정책" 결정과 정합.
@@ -513,15 +514,14 @@ event Action<SkillCastEvent> SkillCastPublished;
 `SkillData` 확장:
 | 필드 | 타입 | 디폴트 | 설명 |
 |------|------|--------|------|
-| effects | SkillEffect[] | empty | 발동 시 적용 효과. 본 Phase에서는 `SkillDamageEffect`만 사용 |
+| damageAmount | int | 0 | 발동 시 HP 데미지. 0이면 데미지 없음 |
 
-`SkillEffect`:
-- `SkillDamageEffect { int amount }`
-- `HealEffect`, `BuffEffect`, `DebuffEffect`는 실제 동작을 넣는 Phase에서 정의
+`SkillEffect` 계층은 본 Phase에서 만들지 않는다.
+회복, 버프, 디버프처럼 두 번째 효과 규칙이 생기는 Phase에서 다시 검토한다.
 
 **Content assets**:
 - 본 Phase에서는 새 무공·새 적 에셋을 따로 만들지 않는다.
-- 기존 확인용 `SkillData` 에셋에는 `SkillDamageEffect`를 채우고, 기존 `EnemyData` 에셋에는 일반 공격 값을 채운다.
+- 기존 확인용 `SkillData` 에셋에는 `damageAmount`를 채우고, 기존 `EnemyData` 에셋에는 일반 공격 값을 채운다.
 
 `EnemyActor` 확장:
 | 필드 추가 | 타입 | 디폴트 | 설명 |
@@ -542,7 +542,7 @@ event Action<SkillCastEvent> SkillCastPublished;
      - `Single`: 가장 앞의 살아있는 적 1명.
      - `NearbyPair`: 가장 앞의 살아있는 적부터 최대 2명.
      - `All`: 모든 살아있는 적.
-   - 선택된 타겟마다 `SkillDamageEffect.amount`만큼 데미지를 적용하고 `DamagePublished`를 보낸다.
+   - `skill.damageAmount > 0`이면 선택된 타겟마다 그 값만큼 데미지를 적용하고 `DamagePublished`를 보낸다.
 2. **적 일반 공격 (Engage 페이즈 + Idle 상태에서만)**:
    - `normalAttackCooldown > 0` → `cd -= dt`.
    - `cd ≤ 0` 이고 플레이어와의 거리 ≤ `enemy.engageDistance` → 플레이어에게 데미지 적용 + `cd = normalAttackPeriod`.
@@ -1190,7 +1190,10 @@ public interface ITelemetrySink
 | 2026-05-21 | 0.4.8 | `SkillRange`를 정확한 거리 밴드가 아니라 사거리 등급으로 정리. Close는 25 이하, Mid는 60 이하, Long은 100 이하에서 시전 가능하므로 가까운 적에게 Mid 무공도 사용할 수 있다. |
 | 2026-05-21 | 0.4.9 | `AttackRange`를 `EngageDistance`로 재명명해 교전 시작 거리와 무공 범위를 분리. `SkillRange` 멤버를 `Single`/`NearbyPair`/`All`로 바꾸고, 거리 게이팅이 아니라 타겟 범위 의미로 정리. |
 | 2026-05-21 | 0.4.10 | **Phase 3 완료** — `IBattleSystem` 구조 도입, `MovementSystem`/`EngagementSystem`/`CastingSystem` 분리, `SkillData`/`SkillSlot`/기세 자원/자동 시전 결정 트리 추가. EditMode 테스트와 PlayMode 확인 체크리스트 통과. |
-| 2026-05-21 | 0.4.11 | **Phase 4 진입 전 SSOT 보정** — `SkillRange`가 타겟 범위가 되었으므로 적 일반 공격의 거리 판정은 `EnemyData.engageDistance`/`Actor.EngageDistance`로 정리. Phase 4는 `SkillDamageEffect`만 도입하고 회복·버프·디버프와 `IDamageResolver` 인터페이스는 실제 규칙이 생기는 Phase까지 보류. 공개 전투 이벤트명은 `Published` 계열로 정리. |
+| 2026-05-21 | 0.4.11 | **Phase 4 진입 전 SSOT 보정** — `SkillRange`가 타겟 범위가 되었으므로 적 일반 공격의 거리 판정은 `EnemyData.engageDistance`/`Actor.EngageDistance`로 정리. Phase 4는 `SkillData.damageAmount`만 도입하고 회복·버프·디버프와 `IDamageResolver` 인터페이스는 실제 규칙이 생기는 Phase까지 보류. 공개 전투 이벤트명은 `Published` 계열로 정리. |
+| 2026-05-31 | 0.4.12 | **Phase 4 스킬 데미지 단순화** — Unity 기본 Inspector에서 `[SerializeReference] SkillEffect[]` 하위 타입 선택이 안정적이지 않아 `SkillEffect`/`SkillDamageEffect` 구조를 보류하고 `SkillData.damageAmount` 직접 필드로 정리. |
+| 2026-06-02 | 0.4.13 | **BattleSnapshot 대상 분리** — `Actors[0] == Player` 암묵 계약을 제거하고 `BattleSnapshot.Player`/`BattleSnapshot.Enemies`로 공개 스냅샷을 분리. `Enemies`는 `BattleStartData.Enemies` 입력 순서를 유지한다. |
+| 2026-06-02 | 0.4.14 | **Phase 4 완료** — 일반 공격, 스킬 데미지, 데미지/사망/승패 이벤트, `BattleResult` 정리 완료. EditMode 검증(`EnemyNormalAttackTests`, `SkillDamageTests`, `BattleResultTests`)과 빌드/테스트 명령 통과. |
 
 ---
 

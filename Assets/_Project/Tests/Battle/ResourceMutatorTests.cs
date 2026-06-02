@@ -19,7 +19,7 @@ namespace MurimRunaway.Battle.Tests
             engine.SnapshotPublished += s => snapshot = s;
             engine.Start();
 
-            Assert.AreEqual(50, snapshot.Actors[0].Mana);
+            Assert.AreEqual(50, snapshot.Player.Mana);
         }
 
         [Test]
@@ -34,7 +34,7 @@ namespace MurimRunaway.Battle.Tests
             engine.SnapshotPublished += s => snapshot = s;
             engine.Start();
 
-            Assert.AreEqual(100, snapshot.Actors[0].Mana);
+            Assert.AreEqual(100, snapshot.Player.Mana);
         }
 
         [Test]
@@ -50,7 +50,7 @@ namespace MurimRunaway.Battle.Tests
             engine.SnapshotPublished += s => snapshot = s;
             engine.Start();
 
-            Assert.AreEqual(0, snapshot.Actors[0].Momentum);
+            Assert.AreEqual(0, snapshot.Player.Momentum);
         }
 
         [Test]
@@ -65,7 +65,7 @@ namespace MurimRunaway.Battle.Tests
             engine.SnapshotPublished += s => snapshot = s;
             engine.Start();
 
-            Assert.AreEqual(10, snapshot.Actors[0].Momentum);
+            Assert.AreEqual(10, snapshot.Player.Momentum);
         }
     }
 }

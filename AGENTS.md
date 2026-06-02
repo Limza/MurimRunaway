@@ -6,6 +6,8 @@ AI 어시스턴트와 작업할 때 따르는 프로젝트 전반 규칙. 코드
 
 문서 작성 형식 규칙(콜아웃·폴딩·인지 부하)은 [Docs/AGENTS.md](Docs/AGENTS.md)에 있다. Docs 폴더에서 작업할 때 자동으로 로드된다.
 
+Anki Cloze 작성 기준은 [ANKI_CLOZE.md](ANKI_CLOZE.md)에 있다. Anki Cloze 문제를 만들 때 먼저 확인한다.
+
 ---
 
 ## 1. Phase 진행 규칙

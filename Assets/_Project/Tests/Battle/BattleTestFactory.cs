@@ -63,12 +63,21 @@ namespace MurimRunaway.Battle.Tests
             };
         }
 
-        public static EnemyData CreateEnemy(string id = "test_enemy", float spawnPosition = 20f)
+        public static EnemyData CreateEnemy(
+            string id = "test_enemy",
+            float spawnPosition = 20f,
+            int maxHp = 30,
+            int normalAttackDamage = 3,
+            float normalAttackPeriod = 2.5f,
+            float engageDistance = 20f)
         {
             var enemy = ScriptableObject.CreateInstance<EnemyData>();
             enemy.Id = id;
-            enemy.MaxHp = 30;
+            enemy.MaxHp = maxHp;
             enemy.SpawnPosition = spawnPosition;
+            enemy.NormalAttackDamage = normalAttackDamage;
+            enemy.NormalAttackPeriod = normalAttackPeriod;
+            enemy.EngageDistance = engageDistance;
             return enemy;
         }
 
@@ -77,7 +86,8 @@ namespace MurimRunaway.Battle.Tests
             SkillRange range,
             int manaCost = 0,
             float cooldownSec = 1.5f,
-            int momentumGainOnCast = 0)
+            int momentumGainOnCast = 0,
+            int damageAmount = 0)
         {
             var skill = ScriptableObject.CreateInstance<SkillData>();
             skill.Id = id;
@@ -86,6 +96,7 @@ namespace MurimRunaway.Battle.Tests
             skill.CooldownSec = cooldownSec;
             skill.PreferredRange = range;
             skill.MomentumGainOnCast = momentumGainOnCast;
+            skill.DamageAmount = damageAmount;
             return skill;
         }
     }

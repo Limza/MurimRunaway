@@ -78,7 +78,7 @@ namespace MurimRunaway.Battle.Engine
                 Rng = _rng,
             };
 
-            // 등록 순서 = 실행 순서. Movement → Engagement → Casting.
+            // 등록 순서 = 실행 순서. Movement → Engagement → Casting → EnemyAttack.
             _systems = new IBattleSystem[]
             {
                 new MovementSystem(),
@@ -147,14 +147,10 @@ namespace MurimRunaway.Battle.Engine
             var skillCastEvent = new SkillCastEvent(caster.Id, slotIndex, skill.Id);
             SkillCastPublished?.Invoke(skillCastEvent);
 
-            // 범위 내 적들에서 데미지 적용
-            foreach (var skillTarget in targets.Span)
+            if (skill.DamageAmount > 0)
             {
-                foreach (var effect in skill.Effects)
-                {
-                    if (effect is SkillDamageEffect damageEffect)
-                        ApplyDamage(caster, skillTarget, damageEffect.Amount, DamageKind.Skill, skill.Id);
-                }
+                foreach (var skillTarget in targets.Span)
+                    ApplyDamage(caster, skillTarget, skill.DamageAmount, DamageKind.Skill, skill.Id);
             }
 
             return true;
@@ -181,8 +177,36 @@ namespace MurimRunaway.Battle.Engine
             foreach (var system in _systems)
                 system.Tick(_context, deltaTime);
 
-            // 사망/승패 정리
-            ResolveDeathsAndResult();
+            // 사망한 액터를 Dead로 확정하고 이벤트를 한 번만 발행한다.
+            {
+                if (_context.Player.Hp <= 0 && _context.Player.State != ActorState.Dead)
+                {
+                    _context.Player.State = ActorState.Dead;
+                    ActorDeathPublished?.Invoke(new ActorDeathEvent(_context.Player.Id));
+                }
+
+                foreach (var enemy in _context.Enemies)
+                {
+                    if (enemy.Hp > 0 || enemy.State == ActorState.Dead)
+                        continue;
+
+                    enemy.State = ActorState.Dead;
+                    ActorDeathPublished?.Invoke(new ActorDeathEvent(enemy.Id));
+                }
+            }
+
+            // 최종 전투 결과를 한 번만 발행한다.
+            {
+                if (_result == BattleResult.None && _context.Player.State == ActorState.Dead)
+                {
+                    PublishBattleResult(BattleResult.Defeat);
+                }
+                else if (_result == BattleResult.None
+                    && _context.Enemies.All(enemy => enemy.State == ActorState.Dead))
+                {
+                    PublishBattleResult(BattleResult.Victory);
+                }
+            }
 
             // 사망 판정 전까지 시스템 실행 뒤 바로 스냅샷을 보낸다.
             PublishSnapshot();
@@ -191,44 +215,18 @@ namespace MurimRunaway.Battle.Engine
         private void PublishSnapshot()
         {
             var enemies = _context.Enemies;
-            var actors = new ActorView[1 + enemies.Length];
+            var enemyViews = new ActorView[enemies.Length];
 
-            actors[0] = _context.Player.ToView();
             for (var index = 0; index < enemies.Length; index++)
-                actors[index + 1] = enemies[index].ToView();
+                enemyViews[index] = enemies[index].ToView();
 
-            var battleSnapshot = new BattleSnapshot(_context.TickIndex, _context.TimeSec, actors, _context.Phase);
+            var battleSnapshot = new BattleSnapshot(
+                _context.TickIndex,
+                _context.TimeSec,
+                _context.Player.ToView(),
+                enemyViews,
+                _context.Phase);
             SnapshotPublished?.Invoke(battleSnapshot);
-        }
-
-        private void ResolveDeathsAndResult()
-        {
-            if (_result != BattleResult.None)
-                return;
-
-            if (_context.Player.Hp <= 0 && _context.Player.State != ActorState.Dead)
-            {
-                _context.Player.State = ActorState.Dead;
-                ActorDeathPublished?.Invoke(new ActorDeathEvent(_context.Player.Id));
-            }
-
-            foreach (var enemy in _context.Enemies)
-            {
-                if (enemy.Hp > 0 || enemy.State == ActorState.Dead)
-                    continue;
-
-                enemy.State = ActorState.Dead;
-                ActorDeathPublished?.Invoke(new ActorDeathEvent(enemy.Id));
-            }
-
-            if (_context.Player.State == ActorState.Dead)
-            {
-                PublishBattleResult(BattleResult.Defeat);
-                return;
-            }
-
-            if (_context.Enemies.All(enemy => enemy.State == ActorState.Dead))
-                PublishBattleResult(BattleResult.Victory);
         }
 
         private void PublishBattleResult(BattleResult result)

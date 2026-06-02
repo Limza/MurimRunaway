@@ -1,20 +1,27 @@
 namespace MurimRunaway.Battle.Domain
 {
-    /// <summary>매 틱 Engine이 View에 보내는 전체 스냅샷. id 오름차순 정렬 보장.</summary>
+    /// <summary>매 Tick 끝에 Engine이 View와 Test로 보내는 전투 상태 읽기 전용 사본.</summary>
     public readonly struct BattleSnapshot
     {
-        /// <summary>시뮬레이션 스텝 ID. 정수·결정론. 리플레이/골든 테스트의 동일성 비교 키, 로그 식별자.</summary>
+        /// <summary>시뮬레이션 스텝 ID. 결정성 비교와 로그 식별에 사용한다.</summary>
         public readonly long TickIndex;
-        /// <summary>전투 시작 후 누적 경과 시간(초). float 누적이라 드리프트 가능. UI 표시·게임 로직 타이밍용.</summary>
+        /// <summary>전투 시작 후 누적 경과 시간(초).</summary>
         public readonly float TimeSec;
-        public readonly ActorView[] Actors;
+        public readonly ActorView Player;
+        public readonly ActorView[] Enemies;
         public readonly BattlePhase Phase;
 
-        public BattleSnapshot(long tickIndex, float timeSec, ActorView[] actors, BattlePhase phase)
+        public BattleSnapshot(
+            long tickIndex,
+            float timeSec,
+            ActorView player,
+            ActorView[] enemies,
+            BattlePhase phase)
         {
-            TickIndex = tickIndex; 
-            TimeSec = timeSec; 
-            Actors = actors; 
+            TickIndex = tickIndex;
+            TimeSec = timeSec;
+            Player = player;
+            Enemies = enemies;
             Phase = phase;
         }
     }

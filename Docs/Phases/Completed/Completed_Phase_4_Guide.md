@@ -8,7 +8,7 @@
 > 본 가이드는 작업 순서 안내다.
 > 사양이 다르면 SSOT가 우선이다.
 >
-> **함께 보기**: [[Phase_4_Learned]].
+> **함께 보기**: [[Completed_Phase_4_Learned]].
 > 이유와 개념 설명은 Learned에 있다.
 
 ---
@@ -39,9 +39,9 @@ Phase 4에서는 **새 전투 에셋을 따로 늘리지 않는다.**
 
 | 에셋 | 작업 |
 |------|------|
-| `Assets/_Project/Data/Skills/tae_in_jang.asset` | `SkillDamageEffect` 추가 |
-| `Assets/_Project/Data/Skills/cheonha_36_geom.asset` | `SkillDamageEffect` 추가 |
-| `Assets/_Project/Data/Skills/simbeop_unki.asset` | 데미지 없음. `Effects`는 비워 둠 |
+| `Assets/_Project/Data/Skills/tae_in_jang.asset` | `DamageAmount = 5` 입력 |
+| `Assets/_Project/Data/Skills/cheonha_36_geom.asset` | `DamageAmount = 5` 입력 |
+| `Assets/_Project/Data/Skills/simbeop_unki.asset` | `DamageAmount = 0` 유지 |
 | `Assets/_Project/Data/Enemies/EnemyData.asset` | 일반 공격 값 입력 |
 
 ### 핵심 규칙
@@ -56,11 +56,11 @@ Phase 4에서는 **새 전투 에셋을 따로 늘리지 않는다.**
 ### 작업 순서
 
 1. Domain 파일을 테마별 폴더로 정리한다.
-2. Domain에 데미지 방식, 전투 결과, 이벤트 데이터, `SkillDamageEffect`를 추가한다.
+2. Domain에 데미지 방식, 전투 결과, 이벤트 데이터를 추가한다.
 3. `EnemyData`와 `EnemyActor`에 일반 공격 값을 추가한다.
-4. `SkillData`에 효과 목록을 추가한다.
+4. `SkillData`에 `DamageAmount`를 추가한다.
 5. Engine에 `IDamageApplier`와 `ApplyDamage`를 추가한다.
-6. `TryCast`에서 `SkillDamageEffect`를 적용한다.
+6. `TryCast`에서 `DamageAmount`를 적용한다.
 7. `EnemyAttackSystem`을 추가한다.
 8. Tick 끝에서 사망과 승패를 정리한다.
 9. 기존 에셋을 갱신하고 View를 최소로 연결한다.
@@ -100,13 +100,10 @@ Phase 4에서 Domain 파일이 더 늘어난다.
 | `Domain/_Enums/BattleResult.cs` | 승리/패배 결과 |
 | `Domain/Damage/DamageEvent.cs` | 데미지 적용 알림 |
 | `Domain/BattleFlow/ActorDeathEvent.cs` | 사망 알림 |
-| `Domain/Skills/SkillEffect.cs` | 무공 효과 base |
-| `Domain/Skills/SkillDamageEffect.cs` | HP를 깎는 무공 효과 |
+Phase 4에서는 `SkillEffect` 계층을 만들지 않는다.
+필요한 스킬 데미지는 `SkillData.DamageAmount` 직접 필드로 처리한다.
 
-`SkillEffect`는 base만 둔다.
-Phase 4에서 실제로 쓰는 하위 타입은 `SkillDamageEffect` 하나다.
-
-> [!example]- Domain 예제 코드
+> [!example] Domain 예제 코드
 > 파일: `Assets/_Project/Scripts/Battle/Domain/_Enums/DamageKind.cs`.
 >
 > 타입: `DamageKind`.
@@ -208,44 +205,6 @@ Phase 4에서 실제로 쓰는 하위 타입은 `SkillDamageEffect` 하나다.
 > }
 > ```
 >
-> 파일: `Assets/_Project/Scripts/Battle/Domain/Skills/SkillEffect.cs`.
->
-> 타입: `SkillEffect`.
->
-> 역할: `SkillData.Effects` 배열에 들어가는 무공 효과들의 공통 base다.
->
-> ```csharp
-> using System;
->
-> namespace MurimRunaway.Battle.Domain
-> {
->     /// <summary>무공이 발동했을 때 적용되는 효과의 base.</summary>
->     [Serializable]
->     public abstract class SkillEffect
->     {
->     }
-> }
-> ```
->
-> 파일: `Assets/_Project/Scripts/Battle/Domain/Skills/SkillDamageEffect.cs`.
->
-> 타입: `SkillDamageEffect`.
->
-> 역할: `TryCast`가 무공 대상에게 적용할 HP 데미지 값을 담는다.
->
-> ```csharp
-> using System;
->
-> namespace MurimRunaway.Battle.Domain
-> {
->     /// <summary>대상 HP를 줄이는 무공 효과.</summary>
->     [Serializable]
->     public sealed class SkillDamageEffect : SkillEffect
->     {
->         public int Amount;
->     }
-> }
-> ```
 
 ### 1.3 Domain — 기존 데이터 확장
 
@@ -265,13 +224,13 @@ Phase 4에서 실제로 쓰는 하위 타입은 `SkillDamageEffect` 하나다.
 | `NormalAttackPeriod` | 전투 중 쓰는 공격 주기 |
 | `NormalAttackCooldown` | 다음 공격까지 남은 시간 |
 
-`SkillData`에는 효과 목록을 추가한다.
+`SkillData`에는 데미지 값을 추가한다.
 
 | 필드 | 뜻 |
 |------|----|
-| `Effects` | 무공 발동 시 적용할 효과 목록. Phase 4에서는 `SkillDamageEffect`만 사용 |
+| `DamageAmount` | 무공 발동 시 적용할 HP 데미지. 0이면 데미지 없음 |
 
-> [!example]- 기존 데이터 확장 코드 조각
+> [!example] 기존 데이터 확장 코드 조각
 > 파일: `Assets/_Project/Scripts/Battle/Domain/Setup/EnemyData.cs`.
 >
 > 타입: `EnemyData`.
@@ -307,24 +266,16 @@ Phase 4에서 실제로 쓰는 하위 타입은 `SkillDamageEffect` 하나다.
 >
 > 타입: `SkillData`.
 >
-> 역할: 무공이 발동했을 때 실행할 효과 목록이다.
-> `BattleEngine.TryCast`가 이 배열을 순회한다.
+> 역할: 무공이 발동했을 때 대상에게 적용할 HP 데미지 값이다.
+> `BattleEngine.TryCast`가 대상마다 이 값을 `ApplyDamage`에 넘긴다.
 >
 > ```csharp
-> using System;
-> using UnityEngine;
->
-> // ...
->
-> [SerializeReference]
-> [Tooltip("무공 발동 시 적용 효과. Phase 4에서는 SkillDamageEffect만 사용")]
-> public SkillEffect[] Effects = Array.Empty<SkillEffect>();
+> [Tooltip("무공 데미지. 0이면 HP 데미지를 주지 않음")]
+> public int DamageAmount;
 > ```
 
-> [!warning]- Unity Inspector 주의
-> `[SerializeReference]` 배열은 Unity 기본 Inspector에서 다루기가 어색할 수 있다.
-> Phase 4에서는 테스트가 먼저라 큰 문제는 아니다.
-> PlayMode 확인용 에셋은 Inspector에서 managed reference를 추가하거나, 임시 에디터 작업으로 채워도 된다.
+> [!note]- Inspector 기준
+> `DamageAmount`는 일반 직렬화 필드라 Unity 기본 Inspector에서 바로 입력할 수 있다.
 
 ### 1.4 Engine — `ApplyDamage` 단일 진입점
 
@@ -337,7 +288,7 @@ Phase 4에서 실제로 쓰는 하위 타입은 `SkillDamageEffect` 하나다.
 - HP는 0 아래로 내려가지 않는다.
 - `DamagePublished`를 발행한다.
 
-> [!example]- `IDamageApplier`와 `ApplyDamage`
+> [!example] `IDamageApplier`와 `ApplyDamage`
 > 파일: `Assets/_Project/Scripts/Battle/Engine/IDamageApplier.cs`.
 >
 > 타입: `IDamageApplier`.
@@ -399,7 +350,7 @@ Phase 4에서 실제로 쓰는 하위 타입은 `SkillDamageEffect` 하나다.
 `EnemyData`의 값을 `EnemyActor`에 복사한다.
 SO는 정적 데이터이고, 전투 중 쿨다운은 `EnemyActor`가 가진다.
 
-> [!example]- `EnemyActor` 생성부에 추가할 값
+> [!example] `EnemyActor` 생성부에 추가할 값
 > 파일: `Assets/_Project/Scripts/Battle/Engine/BattleEngine.cs`.
 >
 > 클래스: `BattleEngine`.
@@ -431,13 +382,13 @@ Phase 4부터는 `NearbyPair`와 `All`이 실제 데미지를 가진다.
 | `NearbyPair` | 가장 앞의 살아있는 적부터 최대 2명 |
 | `All` | 모든 살아있는 적 |
 
-> [!example]- 타겟 선택 helper
+> [!example] 타겟 선택 helper
 > 파일: `Assets/_Project/Scripts/Battle/Engine/BattleContext.cs`.
 >
 > 클래스: `BattleContext`.
 >
 > 역할: `SkillRange`에 맞춰 살아있는 적만 앞쪽 순서로 고른다.
-> `TryCast`는 이 helper가 돌려준 대상들에게 `SkillDamageEffect`를 적용한다.
+> `TryCast`는 이 helper가 돌려준 대상들에게 `DamageAmount`를 적용한다.
 >
 > `ThenBy`는 `OrderBy`로 정렬한 뒤 같은 값끼리 한 번 더 정렬한다.
 > 여기서는 `Position`이 같으면 `Id`가 작은 적을 먼저 고른다.
@@ -495,7 +446,7 @@ Phase 4부터는 `NearbyPair`와 `All`이 실제 데미지를 가진다.
 4. 쿨다운 설정.
 5. 기세 획득.
 6. `SkillCastPublished`.
-7. `SkillDamageEffect` 적용.
+7. `DamageAmount` 적용.
 
 `SkillCastPublished`가 먼저 나가는 이유는 Phase 3의 이벤트 순서를 유지하기 위해서다.
 단, 맞은 적마다 보내는 이벤트는 아니다.
@@ -503,7 +454,7 @@ Phase 4부터는 `NearbyPair`와 `All`이 실제 데미지를 가진다.
 따라서 `SkillCastPublished`는 한 번, `DamagePublished`는 맞은 대상마다 한 번 나간다.
 `SkillCastEvent`에는 피격 대상 id를 넣지 않는다.
 
-> [!example]- `TryCast` 데미지 적용 조각
+> [!example] `TryCast` 데미지 적용 조각
 > 파일: `Assets/_Project/Scripts/Battle/Engine/BattleEngine.cs`.
 >
 > 클래스: `BattleEngine`.
@@ -511,7 +462,7 @@ Phase 4부터는 `NearbyPair`와 `All`이 실제 데미지를 가진다.
 > 메서드: `TryCast(...)`.
 >
 > 역할: `SkillRange`로 대상 목록을 고른 뒤, 시전 이벤트를 한 번 보내고,
-> 대상마다 `SkillDamageEffect`를 적용한다.
+> 대상마다 `DamageAmount`를 적용한다.
 > 맞은 대상 id는 `DamagePublished`가 담당한다.
 >
 > ```csharp
@@ -533,13 +484,10 @@ Phase 4부터는 `NearbyPair`와 `All`이 실제 데미지를 가진다.
 >     var skillCastEvent = new SkillCastEvent(caster.Id, slotIndex, skill.Id);
 >     SkillCastPublished?.Invoke(skillCastEvent);
 >
->     foreach (var skillTarget in targets.Span)
+>     if (skill.DamageAmount > 0)
 >     {
->         foreach (var effect in skill.Effects)
->         {
->             if (effect is SkillDamageEffect damageEffect)
->                 ApplyDamage(caster, skillTarget, damageEffect.Amount, DamageKind.Skill, skill.Id);
->         }
+>         foreach (var skillTarget in targets.Span)
+>             ApplyDamage(caster, skillTarget, skill.DamageAmount, DamageKind.Skill, skill.Id);
 >     }
 >
 >     return true;
@@ -561,7 +509,7 @@ Phase 4부터는 `NearbyPair`와 `All`이 실제 데미지를 가진다.
 - 일반 공격 쿨다운이 0.
 - Player와 Enemy의 거리 ≤ `enemy.EngageDistance`
 
-> [!example]- `EnemyAttackSystem.cs`
+> [!example] `EnemyAttackSystem.cs`
 > 파일: `Assets/_Project/Scripts/Battle/Engine/Systems/EnemyAttackSystem.cs`.
 >
 > 클래스: `EnemyAttackSystem`.
@@ -620,7 +568,7 @@ Phase 4부터는 `NearbyPair`와 `All`이 실제 데미지를 가진다.
 `EnemyAttackSystem.cs`는 파일을 만들기만 하면 실행되지 않는다.
 `BattleEngine.Setup(...)`에서 `_systems` 배열에 등록해야 Tick마다 호출된다.
 
-> [!example]- `EnemyAttackSystem` 등록
+> [!example] `EnemyAttackSystem` 등록
 > 파일: `Assets/_Project/Scripts/Battle/Engine/BattleEngine.cs`.
 >
 > 클래스: `BattleEngine`.
@@ -658,7 +606,7 @@ Phase 4부터는 `NearbyPair`와 `All`이 실제 데미지를 가진다.
 3. `CastingSystem`
 4. `EnemyAttackSystem`
 
-> [!example]- 사망/승패 정리 코드
+> [!example] 사망/승패 정리 코드
 > 파일: `Assets/_Project/Scripts/Battle/Engine/BattleEngine.cs`.
 >
 > 클래스: `BattleEngine`.
@@ -729,27 +677,14 @@ Phase 4부터는 `NearbyPair`와 `All`이 실제 데미지를 가진다.
 Phase 4에서는 새 무공이나 새 적 에셋을 만들지 않는다.
 목표는 이미 있는 플레이 확인용 에셋이 새 데미지 규칙을 쓰게 만드는 것이다.
 
-먼저 `SkillEffect` 추상화가 Unity Inspector에서 실제로 편하게 설정되는지 확인한다.
-현재 구조는 `SkillEffect` base 클래스 하나를 두고,
-`SkillDamageEffect` 같은 하위 클래스를 `SkillEffect[]`에 넣는 다형성 방식이다.
+SkillData 에셋에는 `DamageAmount`를 입력한다.
+Phase 4에서는 Unity 기본 Inspector에서 바로 편집할 수 있는 직접 필드를 쓴다.
 
-확인할 것:
-
-1. `SkillData.Effects`의 `+` 버튼을 누른다.
-2. 새 Element에서 `SkillDamageEffect` 같은 구체 타입을 선택할 수 있는지 본다.
-3. 타입 선택 후 `Amount` 필드가 Inspector에 보이는지 본다.
-
-이 셋 중 하나라도 안 되면,
-에셋 연결 전에 구조 선택을 먼저 해야 한다.
-기본 Inspector에서 타입 선택이 안 되면 플레이어가 에셋을 안정적으로 만들 수 없기 때문이다.
-
-SkillData 에셋에는 `SkillDamageEffect`를 붙인다.
-
-| 파일 | 추천 효과 |
+| 파일 | 필드 |
 |------|-----------|
-| `Assets/_Project/Data/Skills/tae_in_jang.asset` | `SkillDamageEffect.Amount = 5` |
-| `Assets/_Project/Data/Skills/cheonha_36_geom.asset` | `SkillDamageEffect.Amount = 5` |
-| `Assets/_Project/Data/Skills/simbeop_unki.asset` | 비워 둠 |
+| `Assets/_Project/Data/Skills/tae_in_jang.asset` | `DamageAmount = 5` |
+| `Assets/_Project/Data/Skills/cheonha_36_geom.asset` | `DamageAmount = 5` |
+| `Assets/_Project/Data/Skills/simbeop_unki.asset` | `DamageAmount = 0` |
 
 EnemyData 에셋에는 일반 공격 값을 채운다.
 
@@ -762,32 +697,56 @@ EnemyData 에셋에는 일반 공격 값을 채운다.
 `BattleSceneController`는 최소 확인만 붙인다.
 
 - Player HP 게이지가 적 공격으로 줄어드는지 본다.
-- Enemy가 Dead가 되면 마커를 숨기거나 흐리게 표시한다.
-- `BattleResultPublished`를 받으면 임시 디버그 텍스트에 코드 결과를 표시한다.
+- `ActorDeathPublished`를 받으면 콘솔 로그로 죽은 액터를 확인한다.
+- `BattleResultPublished`를 받으면 콘솔 로그로 코드 결과를 확인한다.
+
+> [!example] `BattleSceneController` 이벤트 로그 연결
+> 파일: `Assets/_Project/Scripts/Battle/View/BattleSceneController.cs`.
+>
+> 클래스: `BattleSceneController`.
+>
+> 역할: PlayMode에서 사망과 결과 이벤트가 실제로 발생하는지 Console로 확인한다.
+>
+> `Start()`의 기존 이벤트 구독 근처에 추가한다.
+>
+> ```csharp
+> _engine.ActorDeathPublished += HandleActorDeath;
+> _engine.BattleResultPublished += HandleBattleResult;
+> ```
+>
+> `OnDestroy()`의 기존 이벤트 해제 근처에 추가한다.
+>
+> ```csharp
+> _engine.ActorDeathPublished -= HandleActorDeath;
+> _engine.BattleResultPublished -= HandleBattleResult;
+> ```
+>
+> `HandleSkillCast(...)` 아래에 메서드를 추가한다.
+>
+> ```csharp
+> private void HandleActorDeath(ActorDeathEvent actorDeath)
+> {
+>     var actorLabel = actorDeath.ActorId == 0
+>         ? "Player"
+>         : $"Enemy {actorDeath.ActorId}";
+>     Debug.Log($"ActorDeathPublished: {actorLabel}");
+> }
+>
+> private void HandleBattleResult(BattleResult battleResult)
+> {
+>     Debug.Log($"BattleResultPublished: {battleResult}");
+> }
+> ```
 
 > [!important] UI 문구 정책
 > `Defeat`는 코드 판정명으로만 쓴다.
 > 플레이어에게 보이는 UI에는 "패배" 단어를 쓰지 않는다.
 > 실제 결과 화면은 "재도전", "다시 도전" 계열 문구를 우선 검토한다.
 
-> [!warning]- `SkillDamageEffect`가 Inspector에서 불편할 때
-> `SkillData.Effects`가 `[SerializeReference]` 배열이면 Unity 기본 Inspector에서 추가하기 불편할 수 있다.
-> `+` 버튼을 눌러 Element가 생겨도 타입 선택 메뉴가 안 나오면 기본 Inspector만으로는 설정할 수 없다.
->
-> 이 경우 바로 코드를 추가하지 말고 먼저 선택지를 정한다.
-> Phase 4에서는 아래 둘 중 하나를 고른다.
->
-> 1. 임시 Editor 도구를 만든다.
->    `SkillData`를 선택했을 때 `SkillDamageEffect.Amount = 5`를 넣어주는 버튼을 만든다.
->    장점은 현재 `SkillEffect[]` 구조를 유지한다는 점이다.
->    단점은 런타임 규칙과 무관한 Editor 보조 코드가 생긴다는 점이다.
-> 2. Phase 4 동안 `SkillData`를 단순화한다.
->    예를 들어 `DamageAmount` 같은 직렬화 필드를 직접 둔다.
->    장점은 Inspector에서 바로 보인다는 점이다.
->    단점은 나중에 여러 효과 구조가 필요할 때 다시 `SkillEffect[]`로 되돌려야 한다는 점이다.
->
-> 선택 전에는 에셋을 손으로 YAML 수정하지 않는다.
-> Unity 직렬화 포맷을 직접 고치면 `SerializeReference` 참조 ID가 깨질 수 있다.
+> [!note]- 왜 효과 배열을 쓰지 않는가
+> Phase 4에는 데미지 효과 하나만 필요하다.
+> Unity 기본 Inspector에서 `[SerializeReference]` 하위 타입 선택이 안정적이지 않으므로,
+> 지금은 `DamageAmount` 직접 필드가 더 단순하고 안전하다.
 
 ---
 
@@ -810,9 +769,61 @@ EnemyData 에셋에는 일반 공격 값을 채운다.
 
 - `CreateEnemy`에 `maxHp`, `normalAttackDamage`, `normalAttackPeriod`, `engageDistance` 선택 인자를 추가한다.
 - `CreateSkill`에 `damageAmount` 선택 인자를 추가한다.
-- `damageAmount > 0`이면 `SkillDamageEffect` 1개를 `Effects`에 넣는다.
+- `CreateSkill`은 `skill.DamageAmount = damageAmount`를 설정한다.
 
-> [!example]- 테스트 예제
+> [!example] `BattleTestFactory` 보강 코드
+> 파일: `Assets/_Project/Tests/Battle/BattleTestFactory.cs`.
+>
+> 클래스: `BattleTestFactory`.
+>
+> 역할: Phase 4 테스트가 적 HP, 일반 공격 값, 스킬 데미지를 테스트마다 다르게 넣을 수 있게 한다.
+>
+> 기존 `CreateEnemy(...)`를 아래 형태로 넓힌다.
+>
+> ```csharp
+> public static EnemyData CreateEnemy(
+>     string id = "test_enemy",
+>     float spawnPosition = 20f,
+>     int maxHp = 30,
+>     int normalAttackDamage = 3,
+>     float normalAttackPeriod = 2.5f,
+>     float engageDistance = 20f)
+> {
+>     var enemy = ScriptableObject.CreateInstance<EnemyData>();
+>     enemy.Id = id;
+>     enemy.MaxHp = maxHp;
+>     enemy.SpawnPosition = spawnPosition;
+>     enemy.NormalAttackDamage = normalAttackDamage;
+>     enemy.NormalAttackPeriod = normalAttackPeriod;
+>     enemy.EngageDistance = engageDistance;
+>     return enemy;
+> }
+> ```
+>
+> 기존 `CreateSkill(...)`는 아래처럼 `damageAmount`만 추가한다.
+>
+> ```csharp
+> public static SkillData CreateSkill(
+>     string id,
+>     SkillRange range,
+>     int manaCost = 0,
+>     float cooldownSec = 1.5f,
+>     int momentumGainOnCast = 0,
+>     int damageAmount = 0)
+> {
+>     var skill = ScriptableObject.CreateInstance<SkillData>();
+>     skill.Id = id;
+>     skill.Kind = SkillKind.Technique;
+>     skill.ManaCost = manaCost;
+>     skill.CooldownSec = cooldownSec;
+>     skill.PreferredRange = range;
+>     skill.MomentumGainOnCast = momentumGainOnCast;
+>     skill.DamageAmount = damageAmount;
+>     return skill;
+> }
+> ```
+
+> [!example] 테스트 예제
 > 파일: `Assets/_Project/Tests/Battle/EnemyNormalAttackTests.cs`.
 >
 > 클래스: `EnemyNormalAttackTests`.
@@ -850,7 +861,7 @@ EnemyData 에셋에는 일반 공격 값을 채운다.
 >             engine.Start();
 >             tick.PumpTicks(500);
 >
->             Assert.AreEqual(70, snapshot.Actors[0].Hp);
+>             Assert.AreEqual(70, snapshot.Player.Hp);
 >         }
 >     }
 > }
@@ -860,7 +871,7 @@ EnemyData 에셋에는 일반 공격 값을 채운다.
 >
 > 클래스: `SkillDamageTests`.
 >
-> 역할: `BattleEngine.TryCast`가 `SkillDamageEffect`를 읽고 적 HP를 깎는지 확인한다.
+> 역할: `BattleEngine.TryCast`가 `DamageAmount`를 읽고 적 HP를 깎는지 확인한다.
 > 이 테스트가 통과하면 `GetAliveEnemiesByRange`와 `ApplyDamage` 연결도 같이 검증된다.
 >
 > ```csharp
@@ -893,7 +904,7 @@ EnemyData 에셋에는 일반 공격 값을 채운다.
 >             engine.Start();
 >             tick.PumpTicks(1);
 >
->             Assert.AreEqual(25, snapshot.Actors[1].Hp);
+>             Assert.AreEqual(25, snapshot.Enemies[0].Hp);
 >         }
 >     }
 > }
@@ -905,19 +916,19 @@ EnemyData 에셋에는 일반 공격 값을 채운다.
 
 [[BATTLE_DESIGN]] §3 Phase 4 Acceptance 기준.
 
-- [ ] EditMode: 적 1명(`normalAttackDamage=3`, `normalAttackPeriod=2.5`) vs Player HP 100 → 25초 후 Player HP 70.
-- [ ] EditMode: 데미지 5 무공 시전 → 적 HP 정확히 5 감소.
-- [ ] EditMode: 결정성 — 같은 seed + 같은 `BattleStartData` → `DamagePublished`/`ActorDeathPublished` 시퀀스 동일.
-- [ ] EditMode: 사망 이벤트는 액터마다 한 번만 발생.
-- [ ] EditMode: 전투 결과 이벤트는 한 번만 발생.
-- [ ] PlayMode: 적이 일정 주기로 Player HP를 깎는다.
-- [ ] PlayMode: 스킬이 적 HP를 깎고, 적이 죽으면 전투가 `Victory`로 끝난다.
-- [ ] PlayMode: Player HP가 0이면 전투가 `Defeat`로 끝난다.
-- [ ] 에셋: 기존 `SkillData`/`EnemyData` 에셋에 Phase 4 값이 들어 있다.
-- [ ] `dotnet build MurimRunaway.Battle.Tests.csproj` 통과.
-- [ ] `dotnet build MurimRunaway.Battle.View.csproj` 통과.
-- [ ] `dotnet test MurimRunaway.Battle.Tests.csproj --no-build --verbosity normal` 통과.
-- [ ] [[BATTLE_DESIGN]] §5 변경 이력에 Phase 4 완료 한 줄 추가.
+- [x] EditMode: 적 1명(`normalAttackDamage=3`, `normalAttackPeriod=2.5`) vs Player HP 100 → 25초 후 Player HP 70.
+- [x] EditMode: 데미지 5 무공 시전 → 적 HP 정확히 5 감소.
+- [x] EditMode: 결정성 — 같은 seed + 같은 `BattleStartData` → `DamagePublished`/`ActorDeathPublished` 시퀀스 동일.
+- [x] EditMode: 사망 이벤트는 액터마다 한 번만 발생.
+- [x] EditMode: 전투 결과 이벤트는 한 번만 발생.
+- [x] PlayMode: 적이 일정 주기로 Player HP를 깎는다.
+- [x] PlayMode: 스킬이 적 HP를 깎고, 적이 죽으면 전투가 `Victory`로 끝난다.
+- [x] PlayMode: Player HP가 0이면 전투가 `Defeat`로 끝난다.
+- [x] 에셋: 기존 `SkillData`/`EnemyData` 에셋에 Phase 4 값이 들어 있다.
+- [x] `dotnet build MurimRunaway.Battle.Tests.csproj` 통과.
+- [x] `dotnet build MurimRunaway.Battle.View.csproj` 통과.
+- [x] `dotnet test MurimRunaway.Battle.Tests.csproj --no-build --verbosity normal` 통과.
+- [x] [[BATTLE_DESIGN]] §5 변경 이력에 Phase 4 완료 한 줄 추가.
 
 ---
 
@@ -948,5 +959,5 @@ EnemyData 에셋에는 일반 공격 값을 채운다.
 >   `EnemyAttackSystem`은 `enemy.Hp <= 0`도 함께 본다.
 >
 > - **회복·버프를 미리 만들기**  
->   Phase 4는 `SkillDamageEffect`만 쓴다.
->   다음 규칙이 생길 때 효과 타입을 추가한다.
+>   Phase 4는 `DamageAmount` 직접 필드만 쓴다.
+>   다음 규칙이 생길 때 효과 타입을 다시 검토한다.

@@ -27,11 +27,11 @@ namespace MurimRunaway.Battle.Tests
             tick.PumpTicks(160);
 
             Assert.AreEqual(BattlePhase.Engage, last.Phase);
-            Assert.AreEqual(ActorState.Idle, last.Actors[0].State);
-            Assert.AreEqual(40f, last.Actors[0].Position, 1e-4f);   // Player: 가장 가까운 적-EngageDistance
-            Assert.AreEqual(60f, last.Actors[1].Position, 1e-4f);   // 적은 모두 spawn 위치 유지
-            Assert.AreEqual(80f, last.Actors[2].Position, 1e-4f);
-            Assert.AreEqual(100f, last.Actors[3].Position, 1e-4f);
+            Assert.AreEqual(ActorState.Idle, last.Player.State);
+            Assert.AreEqual(40f, last.Player.Position, 1e-4f);
+            Assert.AreEqual(60f, last.Enemies[0].Position, 1e-4f);
+            Assert.AreEqual(80f, last.Enemies[1].Position, 1e-4f);
+            Assert.AreEqual(100f, last.Enemies[2].Position, 1e-4f);
         }
     }
 }

@@ -16,3 +16,6 @@ MonoBehaviour:
   NameKey: "\uD14C\uC2A4\uD2B8 "
   MaxHp: 30
   SpawnPosition: 100
+  NormalAttackDamage: 3
+  NormalAttackPeriod: 2.5
+  EngageDistance: 20
